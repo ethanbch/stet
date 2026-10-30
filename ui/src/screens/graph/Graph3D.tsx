@@ -31,7 +31,7 @@ type Visual = {
 };
 
 const REL_SIZE = 4;
-const radius = (n: Node) => 3 + Math.min(5, n.degree * 0.9);
+const radius = (n: Node) => 4.5 + Math.min(6, n.degree * 1.2);
 
 /** `#rrggbb` plus an alpha, in a form the graph's colour parser understands. */
 function withAlpha(color: string, a: number): string {
@@ -83,6 +83,8 @@ export function Graph3D({
   const graph = useRef<Instance | null>(null);
   const lib = useRef<Libs | null>(null);
   const [ready, setReady] = useState(false);
+  // Hidden until the layout is framed: the camera's first frames show one node up close.
+  const [shown, setShown] = useState(false);
   const hover = useRef<string | undefined>(undefined);
   const sel = useRef<string | undefined>(undefined);
   sel.current = selected;
@@ -206,7 +208,7 @@ export function Graph3D({
         halo.raycast = noPick;
         group.add(halo);
       }
-      const label = new SpriteText(n.id, 4.5, n.status === "draft" ? muted : ink);
+      const label = new SpriteText(n.id, 6, n.status === "draft" ? muted : ink);
       label.fontFace = font;
       label.fontWeight = "500";
       label.backgroundColor = withAlpha(page, 0.72);
@@ -275,13 +277,17 @@ export function Graph3D({
       })
       .onNodeClick((n: Node) => select.current(sel.current === n.id ? undefined : n.id))
       .onBackgroundClick(() => select.current(undefined))
-      .cooldownTicks(150)
+      // Lay the graph out before the first frame, so it appears settled and is framed within a second.
+      .warmupTicks(120)
+      .cooldownTicks(60)
       .onEngineStop(() => {
         if (fitted) return;
         fitted = true;
-        g.zoomToFit(motion ? 600 : 0, 60);
+        g.zoomToFit(0, 70);
+        setShown(true);
       })
       .graphData({ nodes, links });
+
     // Same bounded charge as the 2D view, so separate groups stay in frame.
     g.d3Force("charge")?.strength(-120).distanceMax(260);
     g.d3Force("link")?.distance(45);
@@ -301,12 +307,24 @@ export function Graph3D({
     const n = selected ? visuals.current.get(selected)?.node : undefined;
     if (!n || n.x === undefined) return;
     const { x = 0, y = 0, z = 0 } = n;
-    const d = 160;
+    // Far enough to keep the neighbours and their labels in view.
+    const d = 320;
     const len = Math.hypot(x, y, z);
     const to = len < 1 ? { x, y, z: z + d } : { x: x * (1 + d / len), y: y * (1 + d / len), z: z * (1 + d / len) };
     (g.controls() as OrbitControls).autoRotate = false;
     g.cameraPosition(to, { x, y, z }, reducedMotion() ? 0 : 900);
   }, [ready, selected]);
 
-  return <div className="graph" ref={box} role="img" aria-label="3D graph of links between fiches" />;
+  return (
+    <>
+      <div
+        className="graph"
+        ref={box}
+        role="img"
+        aria-label="3D graph of links between fiches"
+        style={{ visibility: shown ? "visible" : "hidden" }}
+      />
+      {!shown && <p className="graph-loading">Laying out the graph…</p>}
+    </>
+  );
 }

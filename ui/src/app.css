@@ -1117,6 +1117,24 @@ button.source-row__ref {
   inset: 0;
 }
 
+/* The panel floats on the right: keep the graph's frame clear of it so no fiche hides behind. */
+@media (min-width: 901px) {
+  .graph {
+    right: 320px;
+  }
+}
+
+.graph-loading {
+  position: absolute;
+  inset: 0 320px 0 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+
 .graph-title {
   position: absolute;
   top: 28px;
