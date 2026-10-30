@@ -14,7 +14,14 @@ const strip = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function excerpt(body: string, terms: string[]): string {
-  const flat = body.replace(/\s+/g, " ").trim();
+  const flat = body
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s*\|?\s*:?-{3,}.*$/gm, "")
+    .replace(/(\*\*|__|`|^#+\s|\|)/gm, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const low = strip(flat);
   const pos = terms.map((t) => low.indexOf(strip(t))).filter((p) => p >= 0).sort((a, b) => a - b)[0] ?? 0;
   const start = Math.max(0, pos - 60);

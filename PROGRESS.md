@@ -9,13 +9,15 @@ Framing doc (validated 2026-10-30): https://claude.ai/artifact/Rvz1357twLMKX6xUP
 | 3 | MCP server, 10 tools, stdio e2e test | done |
 | 4 | Lint, index.md and log.md generation | done |
 | 5 | CLI: init, status, lint, mcp | done |
-| 6 | Web server (hono): API, SSE, Host/Origin checks | todo |
-| 7 | CLI: open, connect; launchd on-demand start | todo |
-| 8 | UI: React + Vite + Readout, 5 screens, manifest | todo |
-| 9 | Claude Code adapter: skill, SessionStart hook | todo |
+| 6 | Web server (hono): API, live refresh, Host/Origin checks | done |
+| 7 | CLI: open, connect; launchd on-demand start | done |
+| 8 | UI: React + Vite + Readout, 5 screens, manifest | done |
+| 9 | Claude Code adapter: skill, SessionStart hook | done |
 | 10 | README, LICENSE | todo |
 | 11 | Technical test, with and without adapter | todo |
 
 ## Notes
 - Reads are recorded in `.stet/usage.jsonl`, not in log.md, to keep the human log readable (deviation from the framing doc, same metric).
 - End-of-session reminder: fallback chosen (skill + MCP instructions + AGENTS.md); no clean Claude Code hook injects context at session end.
+- Live refresh polls `/api/version` every 2 s instead of SSE: a long-lived SSE stream held a browser connection slot and delayed other requests by about 30 s. Polling stops when the window is hidden; an open window keeps the on-demand server alive.
+- launchd on-demand start verified: first request after a cold start 0.31 s, then 0.02 s.

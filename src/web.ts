@@ -3,7 +3,6 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { Hono, type Context } from "hono";
-import { streamSSE } from "hono/streaming";
 import { createAdaptorServer } from "@hono/node-server";
 import { LAYOUT } from "./config.js";
 import { STATUSES, isExternalSource, summaryOf, type Fiche, type Status } from "./fiche.js";
@@ -33,7 +32,7 @@ export interface ServeOptions {
   port: number;
   /** Listen on an inherited socket (launchd passes it as fd 0). */
   fd?: number;
-  /** Stop after this many idle minutes (no request, no open window). */
+  /** Stop after this many idle minutes. An open window polls, so it keeps the server alive. */
   idleMinutes?: number;
   quiet?: boolean;
 }
@@ -51,7 +50,7 @@ function ficheRow(v: Vault, f: Fiche, reuses: Map<string, number>) {
   };
 }
 
-export function createApp(vault: Vault, port: number, onActivity: () => void = () => {}, events?: EventHub) {
+export function createApp(vault: Vault, port: number, onActivity: () => void = () => {}) {
   const app = new Hono();
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
@@ -94,7 +93,7 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
         info: issues.filter((i) => i.severity === "info").length,
       },
       drafts: byUpdated.filter((f) => f.fm.status === "draft").slice(0, 20).map((f) => ficheRow(vault, f, reuse.byTitle)),
-      recent: byUpdated.slice(0, 8).map((f) => ficheRow(vault, f, reuse.byTitle)),
+      recent: byUpdated.slice(0, 5).map((f) => ficheRow(vault, f, reuse.byTitle)),
       reused: reuse.recent.slice(0, 8),
       inbox: inbox.map((i) => ({ name: i.name, size: i.size, mtime: new Date(i.mtimeMs).toISOString(), supported: i.supported })),
     });
@@ -231,18 +230,8 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     return c.json(r, r.ok ? 200 : 400);
   });
 
-  app.get("/api/events", (c) =>
-    streamSSE(c, async (stream) => {
-      if (!events) return;
-      const off = events.subscribe(() => void stream.writeSSE({ event: "change", data: String(Date.now()) }));
-      stream.onAbort(off);
-      while (!stream.aborted) {
-        await stream.writeSSE({ event: "ping", data: "" });
-        await stream.sleep(25_000);
-      }
-      off();
-    }),
-  );
+  // The page polls this to refresh when the wiki changes on disk (the agent writes, you edit in Obsidian).
+  app.get("/api/version", (c) => c.json({ version: vault.version() }));
 
   app.get("*", (c) => {
     let rel = decodeURIComponent(new URL(c.req.url).pathname);
@@ -261,45 +250,9 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
   return app;
 }
 
-/** Watches the vault while a window is open and tells subscribers something changed. */
-export class EventHub {
-  private subs = new Set<() => void>();
-  private watcher?: fs.FSWatcher;
-  private timer?: NodeJS.Timeout;
-
-  constructor(private root: string) {}
-
-  get count(): number {
-    return this.subs.size;
-  }
-
-  subscribe(fn: () => void): () => void {
-    this.subs.add(fn);
-    if (!this.watcher) {
-      try {
-        this.watcher = fs.watch(this.root, { recursive: true }, (_e, name) => {
-          if (name && String(name).startsWith(".stet")) return;
-          clearTimeout(this.timer);
-          this.timer = setTimeout(() => this.subs.forEach((s) => s()), 150);
-        });
-      } catch {
-        // watching is a comfort; the page still works without live refresh
-      }
-    }
-    return () => {
-      this.subs.delete(fn);
-      if (!this.subs.size) {
-        this.watcher?.close();
-        this.watcher = undefined;
-      }
-    };
-  }
-}
-
 export function serve(vault: Vault, opts: ServeOptions): Promise<Server> {
   let last = Date.now();
-  const events = new EventHub(vault.root);
-  const app = createApp(vault, opts.port, () => (last = Date.now()), events);
+  const app = createApp(vault, opts.port, () => (last = Date.now()));
   const server = createAdaptorServer({ fetch: app.fetch }) as Server;
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -311,7 +264,7 @@ export function serve(vault: Vault, opts: ServeOptions): Promise<Server> {
       if (opts.idleMinutes) {
         const limit = opts.idleMinutes * 60_000;
         setInterval(() => {
-          if (events.count === 0 && Date.now() - last > limit) process.exit(0);
+          if (Date.now() - last > limit) process.exit(0);
         }, Math.min(limit, 30_000)).unref();
       }
       resolve(server);

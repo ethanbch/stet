@@ -134,6 +134,12 @@ export function summaryOf(f: Fiche): string {
     .map((l) => l.trim())
     .find((l) => l && !l.startsWith("#") && !l.startsWith("```"));
   if (!line) return "";
-  const plain = line.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2").replace(/\[\[([^\]]+)\]\]/g, "$1");
+  const plain = line
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2")
+    .replace(/\[\[([^\]]+)\]\]/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__|\*|`)/g, "")
+    .replace(/^([-*+]|\d+\.)\s+/, "")
+    .replace(/^\|.*/, "");
   return plain.length > 140 ? plain.slice(0, 137) + "..." : plain;
 }

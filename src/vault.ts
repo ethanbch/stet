@@ -207,6 +207,28 @@ export class Vault {
     return undefined;
   }
 
+  /** Changes whenever a fiche, the inbox, the sources or the log change. Cheap: a few stat calls. */
+  version(): string {
+    let v = 0;
+    for (const dir of [LAYOUT.fiches, LAYOUT.inbox, LAYOUT.imports, LAYOUT.sessions]) {
+      try {
+        const names = fs.readdirSync(this.abs(dir));
+        v += names.length * 1e-3;
+        for (const n of names) v = Math.max(v, fs.statSync(this.abs(`${dir}/${n}`)).mtimeMs) + names.length * 1e-6;
+      } catch {
+        // missing folder
+      }
+    }
+    for (const f of [LAYOUT.log, LAYOUT.index]) {
+      try {
+        v = Math.max(v, fs.statSync(this.abs(f)).mtimeMs);
+      } catch {
+        // missing file
+      }
+    }
+    return v.toFixed(6);
+  }
+
   // ---------- inbox ----------
 
   inbox(): InboxItem[] {
