@@ -64,3 +64,12 @@ describe("session-start hook", () => {
     expect(run("/work/client/app")).toContain("capture is disabled");
   });
 });
+
+describe("MCP registration", () => {
+  it("puts the server name before the variadic -e option", async () => {
+    const { mcpAddArgs } = await import("../src/connect.js");
+    const args = mcpAddArgs("/x/Stet");
+    expect(args.indexOf("stet")).toBeLessThan(args.indexOf("-e"));
+    expect(args.slice(args.indexOf("--") + 1).at(-1)).toBe("mcp");
+  });
+});

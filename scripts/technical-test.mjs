@@ -59,7 +59,8 @@ function runMode(mode) {
   const wiki = path.join(base, "wiki");
   const project = path.join(base, "project");
   fs.mkdirSync(project);
-  execFileSync(process.execPath, [CLI, "init", wiki], { env: { ...process.env, STET_HOME: wiki } });
+  // STET_HOME only: `init <path>` would also make this temporary wiki your default one.
+  execFileSync(process.execPath, [CLI, "init"], { env: { ...process.env, STET_HOME: wiki } });
   const vault = new Vault(wiki);
 
   const mcp = path.join(base, "mcp.json");

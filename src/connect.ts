@@ -29,7 +29,8 @@ function hasClaude(): boolean {
 
 export function mcpAddArgs(vault: string): string[] {
   const { node, cli } = selfCommand();
-  return ["mcp", "add", "--scope", "user", "-e", `STET_HOME=${vault}`, "stet", "--", node, cli, "mcp"];
+  // The name goes before -e: -e is variadic and would take the name as a variable.
+  return ["mcp", "add", "--scope", "user", "stet", "-e", `STET_HOME=${vault}`, "--", node, cli, "mcp"];
 }
 
 /** Registers the MCP server for every Claude Code project of this user. Returns false if `claude` is missing. */
