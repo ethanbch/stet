@@ -43,7 +43,7 @@ function remarkWikiLinks(resolve: (target: string) => string | undefined) {
         const title = resolve(target);
         parts.push({
           type: "link",
-          url: title ? `#/fiche/${encodeURIComponent(title)}` : "#",
+          url: title ? `#/wiki/${encodeURIComponent(title)}` : "#",
           children: [{ type: "text", value: label }],
           data: { hProperties: { className: title ? ["wikilink"] : ["wikilink", "broken"], "data-target": target } },
         });

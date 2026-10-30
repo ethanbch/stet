@@ -11,7 +11,7 @@ stet connect
 
 `stet connect` creates the wiki in `~/Stet`, registers the MCP server with Claude Code and installs a skill and a session hook. It takes under a minute. Requires Node 20 or later and macOS for the on-demand start.
 
-![Stet overview with demo data](docs/overview.jpg)
+![Review screen with demo data: drafts on the left, the fiche on the right](docs/review.jpg)
 
 | Figure | Meaning |
 | --- | --- |
@@ -88,11 +88,14 @@ Billing needs concurrent writes from several workers, so it uses PostgreSQL. See
 
 `stet open` opens it in your browser. To keep it in the Dock: Safari › File › Add to Dock, or Chrome › Install.
 
-- **Overview**: drafts to review, inbox, checks, recent fiches and fiches the agent reused.
-- **Fiche**: the text, its sources (open session notes and imports in place), links here, history. Press `v` to validate and open the next draft, `n` to skip.
-- **Search**: full text, accent-insensitive, filters by tag and status.
-- **Graph**: fiches and links; orphans and separate groups are ringed.
-- **Checks**: what `stet lint` reports, and the log.
+- **Today**: drafts waiting, writes and reuses over 14 days, what needs attention, recent changes.
+- **Review**: drafts on the left, the fiche on the right. `j` `k` move, `v` validates and opens the next draft, `r` rejects. A fiche you had validated and the agent changed since is flagged.
+- **Wiki**: every fiche, filtered by words, status or tag, in the same reader.
+- **Graph**: fiches and links. Click a fiche to highlight its neighbours; orphans and separate groups are ringed.
+- **Checks**: problems grouped by kind, and the log.
+- **⌘K** or `/` searches fiches and jumps to any screen.
+
+![Today screen with demo data](docs/today.jpg)
 
 The interface changes status and tags only. The text stays with the agent or your editor.
 

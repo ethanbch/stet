@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 export type Status = "draft" | "validated";
 
+export type Origin = "session" | "import" | "link";
+
 export interface FicheRow {
+  origin: Origin;
   title: string;
   status: Status;
   tags: string[];
@@ -37,6 +40,14 @@ export interface FicheDetail extends FicheRow {
   links: { target: string; title: string | null }[];
   backlinks: string[];
   history: LogEntry[];
+  revalidation: boolean;
+}
+
+export interface ActivityDay {
+  day: string;
+  written: number;
+  validated: number;
+  reused: number;
 }
 
 export interface Hit {
@@ -158,7 +169,8 @@ export function hashParams(): URLSearchParams {
   return new URLSearchParams(location.hash.split("?")[1] ?? "");
 }
 
-export const ficheHref = (title: string) => `#/fiche/${encodeURIComponent(title)}`;
+export const ficheHref = (title: string) => `#/wiki/${encodeURIComponent(title)}`;
+export const reviewHref = (title: string) => `#/review/${encodeURIComponent(title)}`;
 
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
 const timeFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });

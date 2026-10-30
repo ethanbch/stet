@@ -38,8 +38,15 @@ export interface ServeOptions {
   quiet?: boolean;
 }
 
+function originOf(f: Fiche): "session" | "import" | "link" {
+  if (f.fm.sources.some((s) => s.includes("/sessions/"))) return "session";
+  if (f.fm.sources.some((s) => s.includes("/imports/"))) return "import";
+  return "link";
+}
+
 function ficheRow(v: Vault, f: Fiche, reuses: Map<string, number>) {
   return {
+    origin: originOf(f),
     title: f.fm.title,
     status: f.fm.status,
     tags: f.fm.tags,
@@ -101,6 +108,25 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     });
   });
 
+  // Writes and reuses per day, for the activity chart.
+  app.get("/api/activity", (c) => {
+    const days = Math.min(90, Math.max(7, Number(c.req.query("days") ?? 14)));
+    const keys: string[] = [];
+    for (let i = days - 1; i >= 0; i--) keys.push(new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10));
+    const rows = new Map(keys.map((k) => [k, { day: k, written: 0, validated: 0, reused: 0 }]));
+    for (const e of vault.readLog()) {
+      const r = rows.get(e.at.slice(0, 10));
+      if (!r) continue;
+      if (e.action === "create" || e.action === "update") r.written++;
+      if (e.action === "validate") r.validated++;
+    }
+    for (const u of vault.reuse().recent) {
+      const r = rows.get(u.at.slice(0, 10));
+      if (r) r.reused++;
+    }
+    return c.json([...rows.values()]);
+  });
+
   app.get("/api/fiches", (c) => {
     const reuse = vault.reuse();
     return c.json(vault.fiches().map((f) => ficheRow(vault, f, reuse.byTitle)));
@@ -122,6 +148,12 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
       links: vault.linksOf(f).map((l) => ({ target: l.target, title: resolve(l.target) ?? null })),
       backlinks: vault.backlinks(f).map((b) => b.fm.title),
       history: vault.readLog().filter((e) => e.title === f.fm.title).reverse(),
+      // The agent changed a fiche you had validated: say so in the review.
+      revalidation: (() => {
+        const h = vault.readLog().filter((e) => e.title === f.fm.title);
+        const lastValidate = h.map((e) => e.action).lastIndexOf("validate");
+        return f.fm.status === "draft" && lastValidate >= 0 && h.slice(lastValidate).some((e) => e.action === "update");
+      })(),
     });
   });
 

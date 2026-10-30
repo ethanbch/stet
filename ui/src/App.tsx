@@ -1,22 +1,17 @@
-import { useEffect, useState } from "react";
-import { useRoute } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { useData, useRoute, type Home } from "./api";
 import { Wordmark } from "./readout/Wordmark";
-import { HomeScreen } from "./screens/Home";
-import { FicheScreen } from "./screens/Fiche";
-import { SearchScreen } from "./screens/Search";
+import { IconChecks, IconGraph, IconReview, IconSearch, IconTheme, IconToday, IconWiki } from "./components/icons";
+import { Palette } from "./components/Palette";
+import { TodayScreen } from "./screens/Today";
+import { ReviewScreen } from "./screens/Review";
+import { WikiScreen } from "./screens/Wiki";
 import { GraphScreen } from "./screens/Graph";
 import { ChecksScreen } from "./screens/Checks";
 
-const TABS = [
-  { id: "", label: "Overview" },
-  { id: "search", label: "Search" },
-  { id: "graph", label: "Graph" },
-  { id: "checks", label: "Checks" },
-] as const;
-
 type Theme = "system" | "light" | "dark";
 
-function ThemeToggle() {
+function useTheme(): [Theme, () => void] {
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const t = localStorage.getItem("stet-theme");
@@ -36,55 +31,100 @@ function ThemeToggle() {
     }
   }, [theme]);
   const next: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
-  const label = { system: "System theme", light: "Light theme", dark: "Dark theme" }[theme];
-  return (
-    <button className="ro-icon-button" onClick={() => setTheme(next[theme])} aria-label={`${label}, switch`} title={label}>
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.4">
-        <circle cx="8" cy="8" r="5.5" />
-        {theme === "system" && <path d="M8 2.5v11" />}
-        {theme === "light" && <circle cx="8" cy="8" r="2" fill="currentColor" />}
-        {theme === "dark" && <path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" />}
-      </svg>
-    </button>
-  );
+  return [theme, () => setTheme((t) => next[t])];
 }
+
+const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 
 export function App() {
   const route = useRoute();
-  const [head, ...rest] = route;
-  const tab = head === "fiche" ? null : (head ?? "");
+  const [head = "", ...rest] = route;
+  const arg = rest.join("/");
+  const [theme, cycleTheme] = useTheme();
+  const [palette, setPalette] = useState(false);
+  const { data: home } = useData<Home>("/api/home");
+
+  // Old links (#/fiche/X, #/search) land on the wiki.
+  useEffect(() => {
+    if (head === "fiche") location.replace(`#/wiki/${encodeURIComponent(arg)}`);
+    if (head === "search") location.replace("#/wiki");
+  }, [head, arg]);
+
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalette((p) => !p);
+      }
+      if (e.key === "/" && !(e.target as HTMLElement)?.closest("input, textarea, select")) {
+        e.preventDefault();
+        setPalette(true);
+      }
+    };
+    addEventListener("keydown", on);
+    return () => removeEventListener("keydown", on);
+  }, []);
+
+  const nav = [
+    { id: "", label: "Today", icon: <IconToday /> },
+    { id: "review", label: "Review", icon: <IconReview />, count: home?.counts.drafts, accent: true },
+    { id: "wiki", label: "Wiki", icon: <IconWiki />, count: home?.counts.fiches },
+    { id: "graph", label: "Graph", icon: <IconGraph /> },
+    { id: "checks", label: "Checks", icon: <IconChecks />, count: home ? home.lint.error + home.lint.warning : undefined },
+  ];
+
+  const commands = useMemo(
+    () => [
+      { label: "Go to Today", run: () => (location.hash = "#/") },
+      { label: "Start review", run: () => (location.hash = "#/review") },
+      { label: "Browse the wiki", run: () => (location.hash = "#/wiki") },
+      { label: "Open the graph", run: () => (location.hash = "#/graph") },
+      { label: "Show checks", run: () => (location.hash = "#/checks") },
+      { label: "Switch theme", run: cycleTheme },
+    ],
+    [cycleTheme],
+  );
 
   let screen;
-  if (head === "fiche" && rest.length) screen = <FicheScreen title={rest.join("/")} />;
-  else if (head === "search") screen = <SearchScreen />;
+  if (head === "review") screen = <ReviewScreen title={arg || undefined} />;
+  else if (head === "wiki") screen = <WikiScreen title={arg || undefined} />;
   else if (head === "graph") screen = <GraphScreen />;
   else if (head === "checks") screen = <ChecksScreen />;
-  else screen = <HomeScreen />;
+  else screen = <TodayScreen />;
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <a href="#/" className="app-brand" aria-label="Stet, overview">
-          <Wordmark name="stet" size={22} />
+    <div className="shell">
+      <aside className="sidebar">
+        <a href="#/" className="sidebar__brand" aria-label="Stet, today">
+          <Wordmark name="stet" size={20} />
         </a>
-        <ThemeToggle />
-      </header>
-      <nav className="app-nav">
-        <div className="ro-tabs" role="tablist">
-          {TABS.map((t) => (
-            <a
-              key={t.id}
-              href={`#/${t.id}`}
-              className="ro-tab"
-              role="tab"
-              aria-selected={tab === t.id}
-            >
-              {t.label}
+        <button className="search-trigger" onClick={() => setPalette(true)}>
+          <IconSearch />
+          <span>Search</span>
+          <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
+        </button>
+        <nav className="nav" aria-label="Sections">
+          {nav.map((n) => (
+            <a key={n.id} href={`#/${n.id}`} className="nav__item" aria-current={head === n.id || (n.id === "wiki" && head === "fiche") ? "page" : undefined}>
+              {n.icon}
+              {n.label}
+              {n.count !== undefined && n.count > 0 && (
+                <span className={`nav__count ${n.accent ? "nav__count--accent" : ""}`}>{n.count}</span>
+              )}
             </a>
           ))}
+        </nav>
+        <div className="sidebar__foot">
+          <span className="sidebar__path" title={home?.wiki}>
+            {home?.wiki}
+          </span>
+          <button className="icon-button" onClick={cycleTheme} aria-label={`Theme: ${theme}. Switch`} title={`Theme: ${theme}`}>
+            <IconTheme mode={theme} />
+          </button>
         </div>
-      </nav>
-      <main className="app-main">{screen}</main>
+      </aside>
+      <main className="main">{screen}</main>
+      {palette && <Palette onClose={() => setPalette(false)} commands={commands} />}
     </div>
   );
 }

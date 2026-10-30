@@ -44,7 +44,7 @@ describe("API", () => {
     const a = await (await app.request("/api/fiche?title=a", { headers: H })).json();
     expect(a.backlinks).toEqual(["B"]);
     const b = await (await app.request("/api/fiche?title=B", { headers: H })).json();
-    expect(b.html).toContain('href="#/fiche/A"');
+    expect(b.html).toContain('href="#/wiki/A"');
     const g = await (await app.request("/api/graph", { headers: H })).json();
     expect(g.links).toEqual([{ source: "B", target: "A" }]);
     expect(g.nodes.find((n: { id: string }) => n.id === "B").orphan).toBe(true);

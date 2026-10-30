@@ -140,7 +140,7 @@ describe("links", () => {
 
   it("renders links and marks broken ones, without raw HTML", () => {
     const html = renderMarkdown("[[A]] [[Z]] <script>x</script>", (t) => (t === "A" ? "A" : undefined));
-    expect(html).toContain('href="#/fiche/A"');
+    expect(html).toContain('href="#/wiki/A"');
     expect(html).toContain("broken");
     expect(html).not.toContain("<script>");
   });
