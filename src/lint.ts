@@ -43,6 +43,7 @@ function similar(a: string, b: string): boolean {
 /** Mechanical checks only. Contradictions and outdated facts are the agent's job. */
 export function lint(vault: Vault, now = Date.now()): Issue[] {
   const issues: Issue[] = [];
+  vault.refresh();
   const fiches = vault.fiches();
 
   for (const bad of vault.invalidFiles())

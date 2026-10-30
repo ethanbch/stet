@@ -70,12 +70,18 @@ interface CacheEntry {
   links: WikiLink[];
 }
 
+const SCAN_TTL = 500;
+
 const TEMPLATES = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "templates");
 
 export class Vault {
   readonly root: string;
   config: StetConfig;
   private cache = new Map<string, CacheEntry>();
+  private scannedAt = 0;
+  private sorted: Fiche[] = [];
+  private byKey = new Map<string, Fiche>();
+  private byFile = new Map<string, Fiche>();
 
   constructor(root: string) {
     this.root = path.resolve(root);
@@ -121,7 +127,20 @@ export class Vault {
 
   // ---------- reading ----------
 
+  /** Our own writes call this; edits from other programs show up within SCAN_TTL. */
+  private invalidate(): void {
+    this.scannedAt = 0;
+  }
+
+  /** Forces a fresh look at the files, e.g. before a full check. */
+  refresh(): void {
+    this.invalidate();
+    this.scanFiles();
+  }
+
   private scanFiles(): void {
+    if (Date.now() - this.scannedAt < SCAN_TTL) return;
+    this.scannedAt = Date.now();
     const dir = this.abs(LAYOUT.fiches);
     let names: string[] = [];
     try {
@@ -153,13 +172,20 @@ export class Vault {
       });
     }
     for (const k of [...this.cache.keys()]) if (!seen.has(k)) this.cache.delete(k);
+    this.sorted = [...this.cache.values()]
+      .flatMap((e) => (e.fiche ? [e.fiche] : []))
+      .sort((a, b) => a.fm.title.localeCompare(b.fm.title));
+    this.byKey = new Map();
+    this.byFile = new Map();
+    for (const f of this.sorted) {
+      if (!this.byKey.has(titleKey(f.fm.title))) this.byKey.set(titleKey(f.fm.title), f);
+      this.byFile.set(titleKey(path.basename(f.path, ".md")), f);
+    }
   }
 
   fiches(): Fiche[] {
     this.scanFiles();
-    return [...this.cache.values()]
-      .flatMap((e) => (e.fiche ? [e.fiche] : []))
-      .sort((a, b) => a.fm.title.localeCompare(b.fm.title));
+    return this.sorted;
   }
 
   invalidFiles(): InvalidFile[] {
@@ -174,13 +200,9 @@ export class Vault {
 
   /** Finds a fiche by title, then by file name (what Obsidian does). */
   resolve(target: string): Fiche | undefined {
-    const key = titleKey(target);
-    const all = this.fiches();
-    return (
-      all.find((f) => titleKey(f.fm.title) === key) ??
-      all.find((f) => titleKey(path.basename(f.path, ".md")) === key) ??
-      all.find((f) => titleKey(f.path) === key || titleKey(f.path) === key + ".md")
-    );
+    this.scanFiles();
+    const key = titleKey(target).replace(/^fiches\//, "").replace(/\.md$/, "");
+    return this.byKey.get(key) ?? this.byFile.get(key);
   }
 
   backlinks(f: Fiche): Fiche[] {
@@ -361,6 +383,7 @@ export class Vault {
 
     const rel = sameTitle?.path ?? `${LAYOUT.fiches}/${fileName}`;
     fs.writeFileSync(this.abs(rel), serializeFiche(fm, body, sameTitle?.extra));
+    this.invalidate();
     const notes: string[] = [];
     if (sameTitle?.fm.status === "validated") notes.push("the fiche was validated; it is back to draft until the user validates it again");
     this.appendLog({ action: sameTitle ? "update" : "create", title, session: actor.session });
@@ -422,6 +445,7 @@ export class Vault {
     if (status === "validated" && actor.session !== "user")
       return { ok: false, problems: [{ field: "status", message: "only the user can validate a fiche" }] };
     fs.writeFileSync(this.abs(f.path), serializeFiche({ ...f.fm, status }, f.body, f.extra));
+    this.invalidate();
     this.appendLog({ action: status === "validated" ? "validate" : "unvalidate", title: f.fm.title, session: actor.session });
     this.writeIndex();
     return { ok: true, path: f.path, created: false, notes: [] };
@@ -433,6 +457,7 @@ export class Vault {
     const clean = [...new Set(tags.map((t) => t.trim().toLowerCase().replace(/^#/, "")).filter(Boolean))];
     if (!clean.length) return { ok: false, problems: [{ field: "tags", message: "at least one tag is required" }] };
     fs.writeFileSync(this.abs(f.path), serializeFiche({ ...f.fm, tags: clean }, f.body, f.extra));
+    this.invalidate();
     this.appendLog({ action: "tags", title: f.fm.title, detail: clean.join(", "), session: actor.session });
     this.writeIndex();
     return { ok: true, path: f.path, created: false, notes: [] };
@@ -446,6 +471,7 @@ export class Vault {
     const rel = `${LAYOUT.rejected}/${stamp} ${path.basename(f.path)}`;
     fs.mkdirSync(this.abs(LAYOUT.rejected), { recursive: true });
     fs.renameSync(this.abs(f.path), this.abs(rel));
+    this.invalidate();
     this.appendLog({ action: "reject", title: f.fm.title, session: actor.session });
     this.writeIndex();
     return { ok: true, path: rel, created: false, notes: [] };
