@@ -1,6 +1,6 @@
 # Stet V1 — progress
 
-Framing doc (validated 2026-10-30): https://claude.ai/artifact/Rvz1357twLMKX6xUPrYg5p
+Framing validated on 2026-10-30.
 
 | # | Step | State |
 |---|------|-------|

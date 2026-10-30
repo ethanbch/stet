@@ -9,6 +9,8 @@ npm install -g stet
 stet connect
 ```
 
+New here? Read the [user guide](docs/guide.md).
+
 `stet connect` creates the wiki in `~/Stet`, registers the MCP server with Claude Code and installs a skill and a session hook. It takes under a minute. Requires Node 20 or later and macOS for the on-demand start.
 
 ![Review screen with demo data: drafts on the left, the fiche on the right](docs/review.jpg)
