@@ -3,42 +3,42 @@
     "mode": "with",
     "step": "capture",
     "ok": true,
-    "seconds": 14.9,
+    "seconds": 14,
     "detail": "1 session note(s); fiche: \"Billing service uses PostgreSQL, not SQLite\" citing sources/sessions/2026-10-30-billing-service-database--postgresql-over-sqlite.md"
   },
   {
     "mode": "with",
     "step": "inbox",
     "ok": true,
-    "seconds": 31.9,
+    "seconds": 48.9,
     "detail": "0 item(s) left in the inbox; fiche from the import: \"Billing release moved to Friday 6 November 2026\""
   },
   {
     "mode": "with",
     "step": "reuse",
-    "ok": false,
-    "seconds": 7.3,
-    "detail": "0 reuse(s) recorded; answer: The billing service uses PostgreSQL rather than SQLite, because several workers write to it at once and SQLite allows only one writer at a time. This comes from the Stet fiche \"Billing service uses Po"
+    "ok": true,
+    "seconds": 9.2,
+    "detail": "2 reuse(s) recorded; answer: We chose PostgreSQL over SQLite for the billing service. Several workers need to write to it at the same time, and SQLite only allows one writer at a time.\n\nSource: the Stet fiche \"Billing service use"
   },
   {
     "mode": "without",
     "step": "capture",
     "ok": true,
-    "seconds": 16.1,
-    "detail": "1 session note(s); fiche: \"Billing service database: PostgreSQL\" citing sources/sessions/2026-10-30-billing-service-uses-postgresql-instead-of-sqlite.md"
+    "seconds": 13.2,
+    "detail": "1 session note(s); fiche: \"Billing service database: PostgreSQL\" citing sources/sessions/2026-10-30-billing-service--postgresql-instead-of-sqlite.md"
   },
   {
     "mode": "without",
     "step": "inbox",
     "ok": true,
-    "seconds": 57.2,
+    "seconds": 31.1,
     "detail": "0 item(s) left in the inbox; fiche from the import: \"Billing release date\""
   },
   {
     "mode": "without",
     "step": "reuse",
-    "ok": false,
-    "seconds": 11.1,
-    "detail": "1 reuse(s) recorded; answer: The billing service uses PostgreSQL rather than SQLite, decided on 2026-10-30. Several workers write to billing at the same time, and SQLite allows only one writer at once, so the workers would wait o"
+    "ok": true,
+    "seconds": 8.1,
+    "detail": "2 reuse(s) recorded; answer: On 2026-10-30 you chose PostgreSQL over SQLite for the billing service, because several workers need to write to it at the same time. SQLite only allows one writer per database file, so the workers wo"
   }
 ]

@@ -14,7 +14,7 @@ Framing doc (validated 2026-10-30): https://claude.ai/artifact/Rvz1357twLMKX6xUP
 | 8 | UI: React + Vite + Readout, 5 screens, manifest | done |
 | 9 | Claude Code adapter: skill, SessionStart hook | done |
 | 10 | README, LICENSE | done |
-| 11 | Technical test, with and without adapter | todo |
+| 11 | Technical test, with and without adapter | done |
 
 ## Notes
 - Reads are recorded in `.stet/usage.jsonl`, not in log.md, to keep the human log readable (deviation from the framing doc, same metric).
@@ -25,3 +25,12 @@ Framing doc (validated 2026-10-30): https://claude.ai/artifact/Rvz1357twLMKX6xUP
 - The `v` shortcut ignores key repeats and stale renders: during a browser test, five drafts were validated in a row.
 - Fiche scan cached for 500 ms with a title index: lint on 1,000 fiches went from 5.1 s to 16 ms.
 - Packed with `npm pack` and installed in a temporary prefix: `init`, `status`, `serve` work from the package.
+
+## Technical test (2026-10-30, `node scripts/technical-test.mjs`, real `claude -p`)
+
+| Mode | Capture | Inbox | Reuse | Lint errors |
+|------|---------|-------|-------|-------------|
+| With adapter | pass, 14.0 s | pass, 48.9 s | pass, 9.2 s | 0 |
+| Without adapter | pass, 13.2 s | pass, 31.1 s | pass, 8.1 s | 0 |
+
+V1 scope complete. Not done on purpose: `stet connect` on the user's machine (changes global Claude Code config), npm publish.

@@ -132,7 +132,13 @@ idle_minutes = 10
 
 ## Agents
 
-Tested with Claude Code. The core is an MCP server with instructions and an `AGENTS.md` file; the Claude Code adapter (a skill and a `SessionStart` hook) only adds reminders. The technical test runs the same scenario with and without the adapter (`node scripts/technical-test.mjs`). Other MCP clients should work with `stet mcp` but are not tested yet.
+Tested with Claude Code. The core is an MCP server with instructions and an `AGENTS.md` file; the Claude Code adapter (a skill and a `SessionStart` hook) only adds reminders. The technical test runs the same scenario with a real `claude -p`, with and without the adapter (`node scripts/technical-test.mjs`):
+
+| Step | With adapter | Without adapter |
+| --- | --- | --- |
+| "Keep this": session note and fiche | pass, 14.0 s | pass, 13.2 s |
+| "Process the inbox": fiche from the import, inbox empty | pass, 48.9 s | pass, 31.1 s |
+| New session asks about it: answer from the fiche, reuse counted | pass, 9.2 s | pass, 8.1 s | Other MCP clients should work with `stet mcp` but are not tested yet.
 
 ## What Stet does not do
 
