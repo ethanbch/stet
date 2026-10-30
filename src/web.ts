@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
@@ -77,8 +78,9 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     const issues = lint(vault);
     const inbox = vault.inbox();
     const byUpdated = [...fiches].sort((a, b) => b.fm.updated.localeCompare(a.fm.updated) || b.mtimeMs - a.mtimeMs);
+    const home = os.homedir();
     return c.json({
-      wiki: vault.root,
+      wiki: vault.root.startsWith(home + path.sep) ? "~" + vault.root.slice(home.length) : vault.root,
       counts: {
         fiches: fiches.length,
         drafts: fiches.filter((f) => f.fm.status === "draft").length,

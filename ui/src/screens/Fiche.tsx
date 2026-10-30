@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { bump, ficheHref, formatDay, formatMoment, get, post, useData, type FicheDetail, type Home } from "../api";
 import { Button } from "../readout/Button";
 import { Card } from "../readout/Card";
@@ -53,6 +53,7 @@ export function FicheScreen({ title }: { title: string }) {
   const [confirmReject, setConfirmReject] = useState(false);
   const [source, setSource] = useState<string>();
   const [editTags, setEditTags] = useState<string>();
+  const busy = useRef(false);
 
   useEffect(() => {
     setProblems(undefined);
@@ -71,13 +72,19 @@ export function FicheScreen({ title }: { title: string }) {
     [],
   );
 
+  // Validates the fiche on screen, once: never a stale render, never twice in a row.
   const validateAndNext = useCallback(async () => {
-    if (!data || data.status !== "draft") return;
-    await act("/api/fiche/status", { title: data.title, status: "validated" }, async () => {
-      const next = await nextDraft(data.title);
-      if (next) location.hash = ficheHref(next);
-    });
-  }, [data, act]);
+    if (!data || data.status !== "draft" || stale || busy.current) return;
+    busy.current = true;
+    try {
+      await act("/api/fiche/status", { title: data.title, status: "validated" }, async () => {
+        const next = await nextDraft(data.title);
+        if (next) location.hash = ficheHref(next);
+      });
+    } finally {
+      setTimeout(() => (busy.current = false), 400);
+    }
+  }, [data, act, stale]);
 
   const goNext = useCallback(async () => {
     if (!data) return;
@@ -88,7 +95,7 @@ export function FicheScreen({ title }: { title: string }) {
   // One key to validate: v validates and opens the next draft, n skips to it.
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || confirmReject || source || editTags !== undefined) return;
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || confirmReject || source || editTags !== undefined) return;
       if ((e.target as HTMLElement)?.closest("input, textarea, select")) return;
       if (e.key === "v") void validateAndNext();
       if (e.key === "n") void goNext();

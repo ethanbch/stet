@@ -100,7 +100,12 @@ export function createServer(vault: Vault, actor: Actor): McpServer {
       description: "Full-text search over the fiches. Returns titles, status, tags, summary and an excerpt.",
       inputSchema: { query: z.string().min(1), limit: z.number().int().min(1).max(50).default(10) },
     },
-    async ({ query, limit }) => json(search(vault.fiches(), query, limit)),
+    async ({ query, limit }) => {
+      const hits = search(vault.fiches(), query, limit);
+      // The best hit's summary and excerpt reach the agent: count it as a use, like a read.
+      if (hits[0]) vault.recordRead(hits[0].title, actor.session, "search");
+      return json(hits);
+    },
   );
 
   server.registerTool(

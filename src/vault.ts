@@ -554,12 +554,15 @@ export class Vault {
     return out;
   }
 
-  recordRead(title: string, session: string): void {
+  recordRead(title: string, session: string, via: "read" | "search" = "read"): void {
     fs.mkdirSync(this.abs(LAYOUT.state), { recursive: true });
-    fs.appendFileSync(this.abs(LAYOUT.usage), JSON.stringify({ at: new Date().toISOString(), session, title }) + "\n");
+    fs.appendFileSync(this.abs(LAYOUT.usage), JSON.stringify({ at: new Date().toISOString(), session, title, via }) + "\n");
   }
 
-  /** A reuse is a fiche read by the agent in a session other than the one that created it. */
+  /**
+   * A reuse is a fiche the agent read, or got as the best search hit, in a session other than the one
+   * that created it. Counted once per session and fiche.
+   */
   reuse(): { total: number; byTitle: Map<string, number>; recent: { at: string; title: string; session: string }[] } {
     let lines: string[] = [];
     try {

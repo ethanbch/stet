@@ -12,8 +12,10 @@ export function claudeDir(): string {
 
 /** Absolute command that runs this installation of Stet, independent of PATH. */
 export function selfCommand(): { node: string; cli: string } {
-  const cli = fs.realpathSync(path.resolve(path.dirname(new URL(import.meta.url).pathname), "cli.js"));
-  return { node: process.execPath, cli };
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  // From the sources (tests, dev) the built CLI lives in ../dist.
+  const cli = [path.join(here, "cli.js"), path.join(here, "..", "dist", "cli.js")].find((p) => fs.existsSync(p))!;
+  return { node: process.execPath, cli: fs.realpathSync(cli) };
 }
 
 function hasClaude(): boolean {
@@ -88,13 +90,14 @@ function withoutStetHook(s: Settings): Settings {
 /** The Claude Code adapter: a skill and a SessionStart hook. Comfort only; the MCP server works without it. */
 export function installAdapter(): string[] {
   const done: string[] = [];
+  // Read the settings first: an unreadable file stops the install before anything changes.
+  const s = withoutStetHook(readSettings());
   const skillDir = path.join(claudeDir(), "skills", "stet");
   fs.mkdirSync(skillDir, { recursive: true });
   fs.copyFileSync(path.join(TEMPLATES, "claude", "SKILL.md"), path.join(skillDir, "SKILL.md"));
   done.push(`skill ${path.join(skillDir, "SKILL.md")}`);
 
   const { node, cli } = selfCommand();
-  const s = withoutStetHook(readSettings());
   const hooks = { ...(s.hooks ?? {}) };
   hooks.SessionStart = [
     ...(hooks.SessionStart ?? []),
