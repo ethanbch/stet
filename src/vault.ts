@@ -241,7 +241,7 @@ export class Vault {
         // missing folder
       }
     }
-    for (const f of [LAYOUT.log, LAYOUT.index]) {
+    for (const f of [LAYOUT.log, LAYOUT.index, LAYOUT.agent]) {
       try {
         v = Math.max(v, fs.statSync(this.abs(f)).mtimeMs);
       } catch {
@@ -552,6 +552,28 @@ export class Vault {
       out.push(e);
     }
     return out;
+  }
+
+  /** Called when an agent session starts the MCP server; the setup guide reads it. */
+  recordAgentSession(session: string, cwd?: string): void {
+    const prev = this.agentInfo();
+    fs.mkdirSync(this.abs(LAYOUT.state), { recursive: true });
+    const info = {
+      first_seen: prev?.first_seen ?? new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+      last_session: session,
+      last_folder: cwd ? path.basename(cwd) : undefined,
+      sessions: (prev?.sessions ?? 0) + 1,
+    };
+    fs.writeFileSync(this.abs(LAYOUT.agent), JSON.stringify(info, null, 2) + "\n");
+  }
+
+  agentInfo(): { first_seen: string; last_seen: string; last_folder?: string; sessions: number } | undefined {
+    try {
+      return JSON.parse(fs.readFileSync(this.abs(LAYOUT.agent), "utf8"));
+    } catch {
+      return undefined;
+    }
   }
 
   recordRead(title: string, session: string, via: "read" | "search" = "read"): void {

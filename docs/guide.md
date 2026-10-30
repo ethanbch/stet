@@ -28,6 +28,8 @@ You need Node 20 or later and Claude Code.
 
 Check it worked: in a new Claude Code session, run `/mcp`. The list shows `stet` as connected.
 
+Then run `stet open`. On an empty wiki, the interface opens on **Get started**: five steps (connect Claude Code, keep a first fiche, validate it, feed the inbox, pin Stet to the Dock) that check themselves as you do them. Reopen it any time from ⌘K › *Show the setup guide*.
+
 ## 2. How it works in one minute
 
 ```

@@ -8,6 +8,7 @@ import { ReviewScreen } from "./screens/Review";
 import { WikiScreen } from "./screens/Wiki";
 import { GraphScreen } from "./screens/Graph";
 import { ChecksScreen } from "./screens/Checks";
+import { SetupGuide, useSetupHidden, useSetupProgress } from "./screens/Setup";
 
 type Theme = "system" | "light" | "dark";
 
@@ -43,6 +44,8 @@ export function App() {
   const [theme, cycleTheme] = useTheme();
   const [palette, setPalette] = useState(false);
   const { data: home } = useData<Home>("/api/home");
+  const setup = useSetupProgress();
+  const [setupHidden, setSetupHidden] = useSetupHidden();
 
   // Old links (#/fiche/X, #/search) land on the wiki.
   useEffect(() => {
@@ -80,9 +83,13 @@ export function App() {
       { label: "Browse the wiki", run: () => (location.hash = "#/wiki") },
       { label: "Open the graph", run: () => (location.hash = "#/graph") },
       { label: "Show checks", run: () => (location.hash = "#/checks") },
+      { label: "Show the setup guide", run: () => {
+        setSetupHidden(false);
+        location.hash = "#/setup";
+      } },
       { label: "Switch theme", run: cycleTheme },
     ],
-    [cycleTheme],
+    [cycleTheme, setSetupHidden],
   );
 
   let screen;
@@ -90,6 +97,9 @@ export function App() {
   else if (head === "wiki") screen = <WikiScreen title={arg || undefined} />;
   else if (head === "graph") screen = <GraphScreen />;
   else if (head === "checks") screen = <ChecksScreen />;
+  else if (head === "setup") screen = <SetupGuide />;
+  // An empty wiki opens on the guide: there is nothing yet to show on Today.
+  else if (home && home.counts.fiches === 0 && !setupHidden) screen = <SetupGuide />;
   else screen = <TodayScreen />;
 
   return (
@@ -114,6 +124,28 @@ export function App() {
             </a>
           ))}
         </nav>
+        {setup && !setup.complete && !setupHidden && (
+          <a href="#/setup" className="nav__item nav__item--setup" aria-current={head === "setup" ? "page" : undefined}>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden className="nav__ring">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="var(--border-strong)" strokeWidth="2" />
+              <circle
+                cx="8"
+                cy="8"
+                r="6"
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeDasharray={`${(setup.done / setup.total) * 37.7} 37.7`}
+                transform="rotate(-90 8 8)"
+              />
+            </svg>
+            Get started
+            <span className="nav__count">
+              {setup.done}/{setup.total}
+            </span>
+          </a>
+        )}
         <div className="sidebar__foot">
           <span className="sidebar__path" title={home?.wiki}>
             {home?.wiki}

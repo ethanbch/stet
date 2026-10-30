@@ -17,6 +17,7 @@ export const LAYOUT = {
   rejected: ".stet/rejected",
   usage: ".stet/usage.jsonl",
   imported: ".stet/imports.json",
+  agent: ".stet/agent.json",
 } as const;
 
 export interface StetConfig {

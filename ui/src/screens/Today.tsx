@@ -3,6 +3,7 @@ import { Button } from "../readout/Button";
 import { InfoTip } from "../readout/InfoTip";
 import { Activity } from "../components/Activity";
 import { IconArrow } from "../components/icons";
+import { SetupBanner } from "./Setup";
 
 const today = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
 
@@ -52,6 +53,8 @@ export function TodayScreen() {
           <p className="page-sub">{today[0].toUpperCase() + today.slice(1)}</p>
         </div>
       </header>
+
+      <SetupBanner />
 
       <div className="today-top">
         <section className="review-callout">

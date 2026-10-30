@@ -62,6 +62,13 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
   const app = new Hono();
   const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
+  async function body<T>(c: Context): Promise<T | undefined> {
+    try {
+      return (await c.req.json()) as T;
+    } catch {
+      return undefined;
+    }
+  }
 
   // A page from another site must not read or change the wiki: check Host (DNS rebinding) and Origin (CSRF).
   app.use("*", async (c, next) => {
@@ -125,6 +132,50 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
       if (r) r.reused++;
     }
     return c.json([...rows.values()]);
+  });
+
+  // State of each first-run step, computed from the files: the guide never asks "did you do it?".
+  app.get("/api/setup", async (c) => {
+    const fiches = vault.fiches();
+    const count = (dir: string) => {
+      try {
+        return fs.readdirSync(vault.abs(dir)).filter((n) => !n.startsWith(".")).length;
+      } catch {
+        return 0;
+      }
+    };
+    const { isInstalled } = await import("./launchd.js");
+    const home = os.homedir();
+    const short = (p: string) => (p.startsWith(home + path.sep) ? "~" + p.slice(home.length) : p);
+    return c.json({
+      wiki: short(vault.root),
+      agent: vault.agentInfo() ?? null,
+      fiches: fiches.length,
+      sessionNotes: count(LAYOUT.sessions),
+      validated: fiches.filter((f) => f.fm.status === "validated").length,
+      drafts: fiches.filter((f) => f.fm.status === "draft").length,
+      imports: count(LAYOUT.imports),
+      inbox: vault.inbox().length,
+      excluded: vault.config.excluded.length,
+      onDemand: isInstalled(),
+      platform: process.platform,
+      port: vault.config.port,
+    });
+  });
+
+  // Opens a wiki folder in the Finder. Fixed targets only; nothing from the request reaches the command.
+  app.post("/api/reveal", async (c) => {
+    const b = await body<{ what: string }>(c);
+    const targets: Record<string, string[]> = {
+      inbox: [vault.abs(LAYOUT.inbox)],
+      wiki: [vault.root],
+      config: ["-R", vault.abs(LAYOUT.config)],
+    };
+    const args = b && targets[b.what];
+    if (!args || process.platform !== "darwin") return c.json({ ok: false }, 400);
+    const { execFile } = await import("node:child_process");
+    execFile("open", args);
+    return c.json({ ok: true });
   });
 
   app.get("/api/fiches", (c) => {
@@ -234,14 +285,6 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     const limit = Number(c.req.query("limit") ?? 100);
     return c.json(vault.readLog().reverse().slice(0, limit));
   });
-
-  async function body<T>(c: Context): Promise<T | undefined> {
-    try {
-      return (await c.req.json()) as T;
-    } catch {
-      return undefined;
-    }
-  }
 
   app.post("/api/fiche/status", async (c) => {
     const b = await body<{ title: string; status: Status }>(c);

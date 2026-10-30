@@ -250,5 +250,10 @@ export function createServer(vault: Vault, actor: Actor): McpServer {
 export async function runMcp(vault: Vault): Promise<void> {
   const actor: Actor = { session: newSessionId(), cwd: process.env.CLAUDE_PROJECT_DIR || process.cwd() };
   const server = createServer(vault, actor);
+  try {
+    vault.recordAgentSession(actor.session, actor.cwd);
+  } catch {
+    // a read-only wiki still serves reads
+  }
   await server.connect(new StdioServerTransport());
 }

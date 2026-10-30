@@ -69,3 +69,21 @@ describe("API", () => {
     expect((await app.request("/api/source?path=.stet/config.toml", { headers: H })).status).toBe(400);
   });
 });
+
+describe("setup", () => {
+  it("reports each first-run step from the files", async () => {
+    let s = await (await app.request("/api/setup", { headers: H })).json();
+    expect(s).toMatchObject({ agent: null, fiches: 2, validated: 0 });
+    vault.recordAgentSession("s-2026-10-30-cccccc", "/home/me/project");
+    vault.setStatus("A", "validated", { session: "user" });
+    s = await (await app.request("/api/setup", { headers: H })).json();
+    expect(s.agent.sessions).toBe(1);
+    expect(s.agent.last_folder).toBe("project");
+    expect(s.validated).toBe(1);
+  });
+
+  it("opens only fixed folders", async () => {
+    const r = await app.request("/api/reveal", { method: "POST", headers: O, body: JSON.stringify({ what: "/etc" }) });
+    expect(r.status).toBe(400);
+  });
+});
