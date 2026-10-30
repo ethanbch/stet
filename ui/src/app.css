@@ -1138,6 +1138,10 @@ button.source-row__ref {
   backdrop-filter: blur(10px);
 }
 
+.graph-mode {
+  justify-self: start;
+}
+
 .legend {
   display: grid;
   gap: 7px;
