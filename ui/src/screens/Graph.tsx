@@ -1,50 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import ForceGraph from "force-graph";
+import { useEffect, useMemo, useState } from "react";
 import { ficheHref, useData, type Graph } from "../api";
 import { Status } from "../components/Reader";
+import { Graph2D } from "./graph/Graph2D";
+import { Graph3D } from "./graph/Graph3D";
+import { hasWebGL, neighbourMap, tagColors } from "./graph/shared";
 
-type Node = Graph["nodes"][number] & { x?: number; y?: number };
-type Link = { source: string | Node; target: string | Node };
+type Mode = "3d" | "2d";
+const MODE_KEY = "stet-graph-mode";
 
-const idOf = (v: string | Node) => (typeof v === "string" ? v : v.id);
-
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-/** Colour follows the first tag: the four biggest tags get series 1–4, the rest share series 5. */
-function tagColors(nodes: Node[]): Map<string, string> {
-  const counts = new Map<string, number>();
-  for (const n of nodes) counts.set(n.tag, (counts.get(n.tag) ?? 0) + 1);
-  const top = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
-  const map = new Map<string, string>();
-  top.forEach((t, i) => map.set(t, i < 4 ? `--series-${i + 1}` : "--series-5"));
-  return map;
+function storedMode(): Mode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "2d" ? "2d" : "3d";
+  } catch {
+    return "3d";
+  }
 }
 
 export function GraphScreen() {
   const { data } = useData<Graph>("/api/graph");
-  const box = useRef<HTMLDivElement>(null);
-  const graph = useRef<ForceGraph<Node, Link> | null>(null);
   const [onlyLoose, setOnlyLoose] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [theme, setTheme] = useState(0);
-  // The canvas callbacks read these refs, so hover and selection repaint without restarting the layout.
-  const hover = useRef<string | undefined>(undefined);
-  const sel = useRef<string | undefined>(undefined);
-  sel.current = selected;
+  const [webgl, setWebgl] = useState(hasWebGL);
+  const [chosen, setChosen] = useState<Mode>(storedMode);
+  const mode: Mode = webgl ? chosen : "2d";
 
   const colors = useMemo(() => tagColors(data?.nodes ?? []), [data]);
-  const neighbours = useMemo(() => {
-    const m = new Map<string, Set<string>>();
-    for (const l of data?.links ?? []) {
-      if (!m.has(l.source)) m.set(l.source, new Set());
-      if (!m.has(l.target)) m.set(l.target, new Set());
-      m.get(l.source)!.add(l.target);
-      m.get(l.target)!.add(l.source);
-    }
-    return m;
-  }, [data]);
+  const neighbours = useMemo(() => neighbourMap(data?.links ?? []), [data]);
 
   // Canvas colours come from CSS variables: repaint when the theme changes.
   useEffect(() => {
@@ -59,106 +41,14 @@ export function GraphScreen() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!box.current || !data) return;
-    const ink = cssVar("--ink");
-    const muted = cssVar("--ink-muted");
-    const edge = cssVar("--border-strong");
-    const accent = cssVar("--accent");
-    const warn = cssVar("--status-warning");
-    const page = cssVar("--page");
-    const font = cssVar("--font-sans");
-    const nodes: Node[] = data.nodes.filter((n) => !onlyLoose || n.orphan || n.island).map((n) => ({ ...n }));
-    const ids = new Set(nodes.map((n) => n.id));
-    const links: Link[] = data.links.filter((l) => ids.has(l.source) && ids.has(l.target)).map((l) => ({ ...l }));
-    const focus = () => sel.current ?? hover.current;
-    const lit = (id: string) => {
-      const f = focus();
-      return !f || f === id || !!neighbours.get(f)?.has(id);
-    };
-    const touches = (l: Link) => {
-      const f = focus();
-      return !!f && (idOf(l.source) === f || idOf(l.target) === f);
-    };
-
-    if (!graph.current) graph.current = new ForceGraph<Node, Link>(box.current);
-    const g = graph.current;
-    g.width(box.current.clientWidth)
-      .height(box.current.clientHeight)
-      .backgroundColor("rgba(0,0,0,0)")
-      .nodeId("id")
-      .nodeLabel(() => "")
-      .linkColor((l: Link) => (touches(l) ? accent : edge))
-      .linkWidth((l: Link) => (touches(l) ? 1.6 : 0.8))
-      .linkDirectionalArrowLength(3.5)
-      .linkDirectionalArrowRelPos(1)
-      .onNodeHover((n: Node | null) => {
-        hover.current = n?.id;
-        if (box.current) box.current.style.cursor = n ? "pointer" : "default";
-      })
-      .onNodeClick((n: Node) => setSelected((s) => (s === n.id ? undefined : n.id)))
-      .onBackgroundClick(() => setSelected(undefined))
-      .nodeCanvasObject((n: Node, ctx: CanvasRenderingContext2D, scale: number) => {
-        const r = 5 + Math.min(7, n.degree * 1.2);
-        const f = focus();
-        const on = lit(n.id);
-        ctx.globalAlpha = on ? 1 : 0.16;
-        if (n.orphan || n.island) {
-          ctx.beginPath();
-          ctx.arc(n.x!, n.y!, r + 3.5, 0, 2 * Math.PI);
-          ctx.strokeStyle = warn;
-          ctx.lineWidth = 1.6;
-          ctx.stroke();
-        }
-        ctx.beginPath();
-        ctx.arc(n.x!, n.y!, r, 0, 2 * Math.PI);
-        ctx.fillStyle = cssVar(colors.get(n.tag) ?? "--series-5");
-        ctx.fill();
-        if (n.id === f) {
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = page;
-          ctx.stroke();
-        }
-        // Labels: the focus and its neighbours, every fiche in a small wiki, the rest once zoomed in.
-        if (on && (scale > 1.1 || nodes.length <= 24 || n.degree >= 3 || n.id === f)) {
-          const size = Math.max(10, 12.5 / scale);
-          ctx.font = `${n.id === f ? 600 : 500} ${size}px ${font}`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "top";
-          const y = n.y! + r + 5;
-          ctx.lineWidth = 4 / scale;
-          ctx.strokeStyle = page;
-          ctx.strokeText(n.id, n.x!, y);
-          ctx.fillStyle = n.status === "draft" ? muted : ink;
-          ctx.fillText(n.id, n.x!, y);
-        }
-        ctx.globalAlpha = 1;
-      })
-      .nodePointerAreaPaint((n: Node, color: string, ctx: CanvasRenderingContext2D) => {
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(n.x!, n.y!, 12, 0, 2 * Math.PI);
-        ctx.fill();
-      })
-      .cooldownTicks(150)
-      .onEngineStop(() => g.zoomToFit(400, 120))
-      .graphData({ nodes, links });
-    // A bounded charge keeps separate groups near each other instead of drifting off screen.
-    g.d3Force("charge")?.strength(-180).distanceMax(260);
-    g.d3Force("link")?.distance(80);
-
-    const resize = () => box.current && g.width(box.current.clientWidth).height(box.current.clientHeight);
-    addEventListener("resize", resize);
-    return () => removeEventListener("resize", resize);
-  }, [data, onlyLoose, colors, theme, neighbours]);
-
-  useEffect(
-    () => () => {
-      graph.current?._destructor();
-      graph.current = null;
-    },
-    [],
-  );
+  const pick = (m: Mode) => {
+    setChosen(m);
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      // Private mode or blocked storage: the choice just won't be remembered.
+    }
+  };
 
   const node = data?.nodes.find((n) => n.id === selected);
   const orphans = data?.nodes.filter((n) => n.orphan).length ?? 0;
@@ -169,14 +59,25 @@ export function GraphScreen() {
     return acc;
   }, []);
 
+  const view = data && { data, onlyLoose, colors, neighbours, selected, onSelect: setSelected, theme };
+
   return (
     <div className="graph-wrap">
-      <div className="graph" ref={box} role="img" aria-label="Graph of links between fiches" />
+      {view && (mode === "3d" ? <Graph3D {...view} onFail={() => setWebgl(false)} /> : <Graph2D {...view} />)}
       <div className="graph-title">
         <h1 className="page-title">Graph</h1>
         <p className="page-sub">Click a fiche to see its links. A ring marks an orphan or a separate group.</p>
       </div>
       <aside className="graph-panel">
+        {webgl && (
+          <div className="ro-segmented graph-mode" role="group" aria-label="View">
+            {(["3d", "2d"] as const).map((m) => (
+              <button key={m} type="button" aria-pressed={mode === m} onClick={() => pick(m)}>
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
         {node ? (
           <div>
             <Status status={node.status} />
