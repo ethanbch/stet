@@ -7,10 +7,10 @@ First release. Stet lets a coding agent keep what you learn while you work, as l
 ### Install
 
 ```sh
-npm install -g stet && stet connect
+npm install -g @carret/stet && stet connect
 ```
 
-Node 22.12 or later. macOS for the on-demand start. Claude Code is the tested agent; any MCP client can use `stet mcp`.
+The npm package is `@carret/stet`; the command it installs is `stet`. Node 22.12 or later. macOS for the on-demand start. Claude Code is the tested agent; any MCP client can use `stet mcp`.
 
 ### Keep
 

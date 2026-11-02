@@ -1,5 +1,5 @@
 {
-  "name": "stet",
+  "name": "@carret/stet",
   "version": "0.1.0",
   "description": "A thin layer that lets a coding agent build and maintain a markdown wiki for you.",
   "keywords": [

@@ -142,7 +142,7 @@ program
     const connect = await import("./connect.js");
     // Claude Code and launchd start Stet by path. A copy run through npx lives in npm's cache, which npm may clear.
     if (connect.runFromNpxCache()) {
-      console.error("Stet must stay installed for Claude Code to start it. Install it, then connect:\n\n  npm install -g stet && stet connect\n");
+      console.error("Stet must stay installed for Claude Code to start it. Install it, then connect:\n\n  npm install -g @carret/stet && stet connect\n");
       process.exit(1);
     }
     const vault = new Vault(vaultRoot());

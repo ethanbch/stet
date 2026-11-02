@@ -21,7 +21,7 @@ Stet keeps a wiki of what you learn while you work with Claude Code. Your agent 
 
 You need Node 22.12 or later and Claude Code.
 
-1. Install Stet: `npm install -g stet`. From a clone of this repository: `npm install && npm run build && npm link`.
+1. Install Stet: `npm install -g @carret/stet` (the command is `stet`). From a clone of this repository: `npm install && npm run build && npm link`.
 2. Connect it to Claude Code: `stet connect`. This creates the wiki in `~/Stet`, registers the `stet` MCP server for all your projects, and installs a skill and a session hook.
 3. Answer the question about the on-demand start (see [section 10](#10-open-the-interface-from-the-dock)). You can change your mind later.
 4. **Restart your Claude Code sessions.** A session that was already open does not see Stet.
@@ -260,7 +260,7 @@ Other settings in `~/Stet/.stet/config.toml`: `port` (default 4747), `idle_minut
 
 ```sh
 stet disconnect          # removes the MCP server, the skill, the hook and the on-demand start
-npm uninstall -g stet
+npm uninstall -g @carret/stet
 ```
 
 Your wiki in `~/Stet` stays. Delete the folder yourself if you no longer want it.

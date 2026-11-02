@@ -5,7 +5,7 @@ Keep what you learn while you work with a coding agent, in a markdown wiki the a
 You already decide things, fix problems and read sources in your Claude Code sessions. Most of it is lost when the session ends. With Stet, the agent writes it down as linked markdown cards, during the session, when you type `/stet` or say "keep this". Stet itself has no model: it checks every write, keeps the index and the log, and gives you an interface to read and validate what the agent wrote.
 
 ```sh
-npm install -g stet && stet connect
+npm install -g @carret/stet && stet connect
 ```
 
 New here? Read the [user guide](docs/guide.md).
