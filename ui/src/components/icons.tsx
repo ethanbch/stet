@@ -51,3 +51,27 @@ export const IconTheme = ({ mode }: { mode: "system" | "light" | "dark" }) => (
     {mode === "dark" && <path d="M8 2.5a5.5 5.5 0 0 1 0 11z" fill="currentColor" />}
   </svg>
 );
+export const IconInbox = () => (
+  <svg {...base} aria-hidden>
+    <path d="M2.5 9l1.6-5.2a1 1 0 0 1 1-.8h5.8a1 1 0 0 1 1 .8L13.5 9v3.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />
+    <path d="M2.5 9h3l1 1.6h3l1-1.6h3" />
+  </svg>
+);
+export const IconFile = () => (
+  <svg {...base} aria-hidden>
+    <path d="M4 1.8h5.2L12 4.6v9.6H4z" />
+    <path d="M9 1.8v3h3" />
+  </svg>
+);
+/** Your agent: a spark, the thing that turns files into cards. */
+export const IconAgent = () => (
+  <svg {...base} aria-hidden>
+    <path d="M8 2v3M8 11v3M2 8h3M11 8h3M3.8 3.8l2 2M10.2 10.2l2 2M12.2 3.8l-2 2M5.8 10.2l-2 2" />
+  </svg>
+);
+export const IconCard = () => (
+  <svg {...base} aria-hidden>
+    <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+    <path d="M5 6h6M5 8.5h6M5 11h3.5" />
+  </svg>
+);

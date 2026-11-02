@@ -1,31 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { ficheHref, useData, type Graph } from "../api";
+import { cardHref, useData, type Graph } from "../api";
 import { Status } from "../components/Reader";
-import { Graph2D } from "./graph/Graph2D";
-import { Graph3D } from "./graph/Graph3D";
-import { hasWebGL, neighbourMap, tagColors } from "./graph/shared";
+import { GraphCanvas } from "./graph/GraphCanvas";
+import { neighbourMap, tagColors, type ColourBy } from "./graph/shared";
 
-type Mode = "3d" | "2d";
-const MODE_KEY = "stet-graph-mode";
+const COLOUR_KEY = "stet-graph-colour";
 
-function storedMode(): Mode {
-  try {
-    return localStorage.getItem(MODE_KEY) === "2d" ? "2d" : "3d";
-  } catch {
-    return "3d";
-  }
-}
+const IconSliders = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden>
+    <path d="M2.5 4.5h6M11.5 4.5h2M2.5 11.5h2M7.5 11.5h6" />
+    <circle cx="10" cy="4.5" r="1.5" />
+    <circle cx="6" cy="11.5" r="1.5" />
+  </svg>
+);
 
 export function GraphScreen() {
   const { data } = useData<Graph>("/api/graph");
   const [onlyLoose, setOnlyLoose] = useState(false);
+  const [colourBy, setColourBy] = useState<ColourBy>(() => {
+    try {
+      const v = localStorage.getItem(COLOUR_KEY);
+      return v === "project" || v === "kind" || v === "tag" ? v : "none";
+    } catch {
+      return "none";
+    }
+  });
+  const [settings, setSettings] = useState(false);
   const [selected, setSelected] = useState<string>();
   const [theme, setTheme] = useState(0);
-  const [webgl, setWebgl] = useState(hasWebGL);
-  const [chosen, setChosen] = useState<Mode>(storedMode);
-  const mode: Mode = webgl ? chosen : "2d";
 
-  const colors = useMemo(() => tagColors(data?.nodes ?? []), [data]);
+  const colors = useMemo(() => tagColors(data?.nodes ?? [], colourBy), [data, colourBy]);
   const neighbours = useMemo(() => neighbourMap(data?.links ?? []), [data]);
 
   // Canvas colours come from CSS variables: repaint when the theme changes.
@@ -41,92 +45,118 @@ export function GraphScreen() {
     };
   }, []);
 
-  const pick = (m: Mode) => {
-    setChosen(m);
-    try {
-      localStorage.setItem(MODE_KEY, m);
-    } catch {
-      // Private mode or blocked storage: the choice just won't be remembered.
-    }
-  };
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSettings(false);
+        setSelected(undefined);
+      }
+    };
+    addEventListener("keydown", on);
+    return () => removeEventListener("keydown", on);
+  }, []);
 
   const node = data?.nodes.find((n) => n.id === selected);
   const orphans = data?.nodes.filter((n) => n.orphan).length ?? 0;
   const legend = [...colors].reduce<{ label: string; color: string }[]>((acc, [tag, color]) => {
     if (color === "--series-5") {
-      if (!acc.some((a) => a.color === color)) acc.push({ label: "Other tags", color });
+      if (!acc.some((a) => a.color === color)) {
+        // The grey dot holds the cards with no project (or kind) and, past four groups, the smaller ones.
+        const grey = [...colors].filter(([, c]) => c === "--series-5").map(([g]) => g);
+        const none = grey.find((g) => g === "No project" || g === "No kind");
+        const others = grey.filter((g) => g !== none).length;
+        acc.push({ label: none ? (others ? `${none}, others` : none) : "Others", color });
+      }
     } else acc.push({ label: tag, color });
     return acc;
   }, []);
-
-  const view = data && { data, onlyLoose, colors, neighbours, selected, onSelect: setSelected, theme };
+  const linked = node ? (neighbours.get(node.id)?.size ?? 0) : 0;
 
   return (
     <div className="graph-wrap">
-      {view && (mode === "3d" ? <Graph3D {...view} onFail={() => setWebgl(false)} /> : <Graph2D {...view} />)}
-      <div className="graph-title">
-        <h1 className="page-title">Graph</h1>
-        <p className="page-sub">Click a fiche to see its links. A ring marks an orphan or a separate group.</p>
+      {data && (
+        <GraphCanvas
+          data={data}
+          onlyLoose={onlyLoose}
+          colourBy={colourBy}
+          colors={colors}
+          neighbours={neighbours}
+          selected={selected}
+          onSelect={setSelected}
+          theme={theme}
+        />
+      )}
+      {!data && <p className="graph-loading">Loading the graph…</p>}
+
+      <p className="graph-stats">
+        {data?.nodes.length ?? 0} cards · {data?.links.length ?? 0} links
+        {orphans > 0 && ` · ${orphans} orphan${orphans === 1 ? "" : "s"}`}
+      </p>
+
+      <div className="graph-tools">
+        <button
+          type="button"
+          className="icon-button graph-tools__toggle"
+          aria-expanded={settings}
+          aria-label="Display options"
+          title="Display options"
+          onClick={() => setSettings((s) => !s)}
+        >
+          <IconSliders />
+        </button>
+        {settings && (
+          <div className="graph-popover" role="group" aria-label="Display options">
+            <div className="ro-segmented graph-colour" role="group" aria-label="Colour by">
+              {(["none", "project", "kind", "tag"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={colourBy === c}
+                  onClick={() => {
+                    setColourBy(c);
+                    try {
+                      localStorage.setItem(COLOUR_KEY, c);
+                    } catch {
+                      // private mode: the choice lasts for this window
+                    }
+                  }}
+                >
+                  {c === "none" ? "None" : c === "tag" ? "Topic" : c[0].toUpperCase() + c.slice(1)}
+                </button>
+              ))}
+            </div>
+            <label className="check">
+              <input type="checkbox" checked={onlyLoose} onChange={(e) => setOnlyLoose(e.target.checked)} />
+              Only orphans and separate groups
+            </label>
+            {colourBy !== "none" && (
+              <ul className="legend">
+                {legend.map((l) => (
+                  <li key={l.label}>
+                    <span className="swatch" style={{ background: `var(${l.color})` }} />
+                    {l.label}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="graph-popover__hint">Scroll to zoom, drag to move. Labels appear as you zoom in.</p>
+          </div>
+        )}
       </div>
-      <aside className="graph-panel">
-        {webgl && (
-          <div className="ro-segmented graph-mode" role="group" aria-label="View">
-            {(["3d", "2d"] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={mode === m} onClick={() => pick(m)}>
-                {m.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        )}
-        {node ? (
-          <div>
-            <Status status={node.status} />
-            <h2 style={{ margin: "8px 0 4px", fontSize: 16, lineHeight: "22px", fontWeight: 600 }}>{node.id}</h2>
-            <p className="page-sub" style={{ margin: 0, fontSize: 12.5 }}>
-              {neighbours.get(node.id)?.size ?? 0} linked {neighbours.get(node.id)?.size === 1 ? "fiche" : "fiches"}
-              {node.orphan ? " · nothing links here" : ""}
-            </p>
-            <a className="ro-button ro-button--primary" style={{ marginTop: 12, width: "100%" }} href={ficheHref(node.id)}>
-              Open the fiche
-            </a>
-          </div>
-        ) : (
-          <dl className="facts-inline">
-            <div>
-              <dt>Fiches</dt>
-              <dd>{data?.nodes.length ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Links</dt>
-              <dd>{data?.links.length ?? 0}</dd>
-            </div>
-            <div>
-              <dt>Orphans</dt>
-              <dd>{orphans}</dd>
-            </div>
-            <div>
-              <dt>Separate groups</dt>
-              <dd>{data?.islands ?? 0}</dd>
-            </div>
-          </dl>
-        )}
-        <ul className="legend">
-          {legend.map((l) => (
-            <li key={l.label}>
-              <span className="swatch" style={{ background: `var(${l.color})` }} />
-              {l.label}
-            </li>
-          ))}
-          <li>
-            <span className="swatch swatch--ring" />
-            Orphan or separate group
-          </li>
-        </ul>
-        <label className="check">
-          <input type="checkbox" checked={onlyLoose} onChange={(e) => setOnlyLoose(e.target.checked)} />
-          Only orphans and separate groups
-        </label>
-      </aside>
+
+      {node && (
+        <div className="graph-card">
+          <Status status={node.status} />
+          <h2 className="graph-card__title">{node.id}</h2>
+          <p className="graph-card__meta">
+            {linked} linked {linked === 1 ? "card" : "cards"}
+            {node.orphan ? " · nothing links here" : ""}
+          </p>
+          <a className="ro-button ro-button--primary graph-card__open" href={cardHref(node.id)}>
+            Open the card
+          </a>
+        </div>
+      )}
     </div>
   );
 }

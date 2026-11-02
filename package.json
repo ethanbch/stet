@@ -2,8 +2,26 @@
   "name": "stet",
   "version": "0.1.0",
   "description": "A thin layer that lets a coding agent build and maintain a markdown wiki for you.",
-  "type": "module",
+  "keywords": [
+    "claude-code",
+    "mcp",
+    "wiki",
+    "knowledge-base",
+    "markdown",
+    "agent",
+    "obsidian"
+  ],
+  "homepage": "https://github.com/ethanbch/stet#readme",
+  "bugs": {
+    "url": "https://github.com/ethanbch/stet/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ethanbch/stet.git"
+  },
   "license": "MIT",
+  "author": "Ethan Benchetrit",
+  "type": "module",
   "bin": {
     "stet": "dist/cli.js"
   },
@@ -11,10 +29,11 @@
     "dist",
     "templates",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && npm run build:ui",
@@ -22,7 +41,9 @@
     "build:ui": "vite build --config ui/vite.config.ts",
     "dev:ui": "vite --config ui/vite.config.ts",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p ui/tsconfig.json --noEmit",
+    "prepack": "npm run build",
+    "first-run": "node scripts/first-run.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.5",
@@ -41,20 +62,22 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@lezer/highlight": "^1.2.5",
     "@types/mdast": "^4.0.4",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@types/three": "0.187.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "3d-force-graph": "1.80.1",
     "force-graph": "^1.52.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "three": "0.187.0",
-    "three-spritetext": "1.10.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"

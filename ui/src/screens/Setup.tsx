@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ago, post, useData } from "../api";
 import { Button } from "../readout/Button";
+import { openInbox } from "../components/Inbox";
 import { SegmentedMeter } from "../readout/SegmentedMeter";
 
 export interface SetupState {
   wiki: string;
   agent: { first_seen: string; last_seen: string; last_folder?: string; sessions: number } | null;
-  fiches: number;
+  cards: number;
   sessionNotes: number;
   validated: number;
   drafts: number;
@@ -76,11 +77,11 @@ export function useSetupHidden(): [boolean, (v: boolean) => void] {
   ];
 }
 
-function CopyLine({ text, kind }: { text: string; kind: "command" | "prompt" }) {
+export function CopyLine({ text, kind, label }: { text: string; kind: "command" | "prompt" | "slash"; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className={`copyline copyline--${kind}`}>
-      <span className="copyline__label">{kind === "command" ? "Terminal" : "Say to your agent"}</span>
+      <span className="copyline__label">{label ?? (kind === "command" ? "Terminal" : kind === "slash" ? "Type in Claude Code" : "Or say to your agent")}</span>
       <code className="copyline__text">{text}</code>
       <button
         className="copyline__button"
@@ -144,7 +145,7 @@ export function buildSteps(s: SetupState, installed: boolean): Step[] {
       body: s.agent ? (
         <>
           <p>
-            Claude Code starts Stet in every session. The agent knows how to keep, find and check fiches; you do not have to explain
+            Claude Code starts Stet in every session. The agent knows how to keep, find and check cards; you do not have to explain
             it.
           </p>
           <p className="muted">
@@ -167,25 +168,30 @@ export function buildSteps(s: SetupState, installed: boolean): Step[] {
     {
       id: "capture",
       title: "Keep something from a session",
-      done: s.fiches > 0,
-      summary: s.fiches
-        ? `${s.fiches} ${s.fiches === 1 ? "fiche" : "fiches"} written, from ${s.sessionNotes} ${s.sessionNotes === 1 ? "session note" : "session notes"}.`
+      done: s.cards > 0,
+      summary: s.cards
+        ? `${s.cards} ${s.cards === 1 ? "card" : "cards"} written, from ${s.sessionNotes} ${s.sessionNotes === 1 ? "session note" : "session notes"}.`
         : "After a decision, a fix or a fact worth keeping.",
       body: (
         <>
-          <p>In any project, when you decide something, fix a bug or learn a fact you will need again, tell your agent:</p>
+          <p>In any project, when you decide something, fix a bug or learn a fact you will need again, type:</p>
+          <CopyLine kind="slash" text="/stet" />
+          <p className="muted">
+            Add what to keep when the session covered several things: <code className="mono">/stet the connection pool decision</code>.
+            Saying it in plain words works too:
+          </p>
           <CopyLine kind="prompt" text="Keep this in Stet." />
           <p className="muted">
-            It writes a session note, the account of what was decided and how, then a fiche that cites it. The agent may also offer
+            The agent writes a session note, the account of what was decided and how, then a card that cites it. It may also offer
             to keep something, at most once per session.
           </p>
-          {s.fiches === 0 && <Waiting>Waiting for a first fiche. It appears here a second after it is written.</Waiting>}
+          {s.cards === 0 && <Waiting>Waiting for a first card. It appears here a second after it is written.</Waiting>}
         </>
       ),
     },
     {
       id: "review",
-      title: "Validate your first fiche",
+      title: "Validate your first card",
       done: s.validated > 0,
       summary: s.validated ? `${s.validated} validated.` : s.drafts ? `${s.drafts} ${s.drafts === 1 ? "draft waits" : "drafts wait"} for you.` : "Everything the agent writes starts as a draft.",
       body: (
@@ -195,8 +201,8 @@ export function buildSteps(s: SetupState, installed: boolean): Step[] {
             or reject it.
           </p>
           <div className="step__actions">
-            <Button variant="primary" disabled={!s.drafts} onClick={() => (location.hash = "#/review")}>
-              Open review
+            <Button variant="primary" disabled={!s.drafts} onClick={() => (location.hash = "#/inbox")}>
+              Open the inbox
             </Button>
             <span className="keys">
               <kbd>v</kbd> validate <kbd>r</kbd> reject <kbd>j</kbd>
@@ -215,11 +221,13 @@ export function buildSteps(s: SetupState, installed: boolean): Step[] {
       body: (
         <>
           <p>
-            Drop text files in <code>{s.wiki}/inbox</code>: <code>.md</code>, <code>.txt</code>, <code>.vtt</code>, <code>.srt</code>. Then
-            ask in any session:
+            For what you learn outside a session: meeting notes, a call transcript, an article, a link. Add it to the inbox and that is
+            all: your agent turns it into drafts at the start of your next session.
           </p>
-          <CopyLine kind="prompt" text="Process the Stet inbox." />
           <div className="step__actions">
+            <Button variant="primary" onClick={openInbox}>
+              Add to the inbox
+            </Button>
             <Reveal what="inbox" label="Open the inbox folder" platform={s.platform} />
             {s.inbox > 0 && (
               <span className="muted" style={{ fontSize: 12.5 }}>
@@ -231,24 +239,81 @@ export function buildSteps(s: SetupState, installed: boolean): Step[] {
       ),
     },
     {
-      id: "dock",
-      title: "Keep Stet in your Dock",
+      id: "ondemand",
+      title: "Start Stet on demand",
       optional: true,
-      done: s.onDemand && installed,
-      summary: s.onDemand && installed ? "Opens from the Dock, starts on demand." : "One click to review, no terminal.",
+      done: s.onDemand,
+      summary: s.onDemand ? "macOS starts Stet when you open it." : "No terminal to keep open.",
       body: (
-        <ul className="subchecks">
-          <Check done={s.onDemand}>
-            <b>Start on demand.</b> macOS starts Stet when the window opens and stops it when idle.
-            {!s.onDemand && <CopyLine kind="command" text="stet connect --launchd" />}
-          </Check>
-          <Check done={installed}>
-            <b>Add the window to the Dock.</b> Safari: File › Add to Dock. Chrome: the install icon in the address bar.
-          </Check>
-        </ul>
+        <>
+          <p>macOS starts Stet when the window opens and stops it after a few idle minutes. Nothing runs in the background otherwise.</p>
+          {!s.onDemand && <CopyLine kind="command" text="stet connect --launchd" />}
+        </>
       ),
     },
+    {
+      id: "app",
+      title: "Install Stet as an app",
+      optional: true,
+      done: installed,
+      summary: installed ? "Opens from the Dock, in its own window." : "One click from the Dock to review what your agent kept.",
+      body: <InstallSteps />,
+    },
   ];
+}
+
+const isSafari = () => /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg/.test(navigator.userAgent);
+
+/** How to add Stet to the Dock, for the browser in use first. */
+function InstallSteps() {
+  const [browser, setBrowser] = useState<"safari" | "chrome">(() => (isSafari() ? "safari" : "chrome"));
+  const Menu = ({ path }: { path: string[] }) => (
+    <span className="menu-path">
+      {path.map((p, i) => (
+        <span key={p}>
+          {i > 0 && <span className="menu-path__sep">›</span>}
+          <kbd>{p}</kbd>
+        </span>
+      ))}
+    </span>
+  );
+  return (
+    <>
+      <p>
+        For more comfort, install Stet as an app. It gets its own window and a Dock icon, so reviewing what your agent kept is one
+        click away, without looking for a browser tab.
+      </p>
+      <div className="ro-segmented install__tabs" role="group" aria-label="Browser">
+        {(["safari", "chrome"] as const).map((b) => (
+          <button key={b} type="button" aria-pressed={browser === b} onClick={() => setBrowser(b)}>
+            {b === "safari" ? "Safari" : "Chrome"}
+          </button>
+        ))}
+      </div>
+      {browser === "safari" ? (
+        <ol className="install__steps">
+          <li>Open Stet in Safari (this page).</li>
+          <li>
+            In the menu bar: <Menu path={["File", "Add to Dock…"]} />
+          </li>
+          <li>
+            Keep the name <b>Stet</b> and click <kbd>Add</kbd>.
+          </li>
+        </ol>
+      ) : (
+        <ol className="install__steps">
+          <li>Open Stet in Chrome (this page).</li>
+          <li>
+            Click the install icon at the right of the address bar, or open the menu: <Menu path={["⋮", "Cast, save, and share", "Install page as app…"]} />
+          </li>
+          <li>
+            Click <kbd>Install</kbd>. To keep it in the Dock: right-click its icon › <Menu path={["Options", "Keep in Dock"]} />
+          </li>
+        </ol>
+      )}
+      <p className="muted">This step checks itself the first time Stet opens as an app.</p>
+    </>
+  );
 }
 
 /** The first-run guide. Steps check themselves from the wiki's files; nothing to tick by hand. */
@@ -284,7 +349,7 @@ export function SetupGuide() {
         <div className="step__actions" style={{ marginTop: 20 }}>
           {essentials && <Button onClick={() => (location.hash = "#/")}>Go to Today</Button>}
           <button className="link-button" onClick={() => setHidden(!hidden)}>
-            {hidden ? "Show the guide in the sidebar" : "Hide this guide"}
+            {hidden ? "Show the guide in the top bar" : "Hide this guide"}
           </button>
         </div>
       </header>

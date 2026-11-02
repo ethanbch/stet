@@ -4,11 +4,13 @@ export type Status = "draft" | "validated";
 
 export type Origin = "session" | "import" | "link";
 
-export interface FicheRow {
+export interface CardRow {
   origin: Origin;
   title: string;
   status: Status;
   tags: string[];
+  kind: string | null;
+  project: string | null;
   created: string;
   updated: string;
   summary: string;
@@ -16,13 +18,28 @@ export interface FicheRow {
   path: string;
 }
 
+export interface Projects {
+  projects: { name: string; count: number }[];
+  none: number;
+  kinds: { name: string; count: number }[];
+}
+
+/** A card your agent pulled into a later session: where, and for what. */
+export interface Recall {
+  at: string;
+  title: string;
+  session: string;
+  project?: string;
+  query?: string;
+}
+
 export interface Home {
   wiki: string;
-  counts: { fiches: number; drafts: number; validated: number; inbox: number; unsupported: number; reuses: number };
+  counts: { cards: number; drafts: number; validated: number; inbox: number; unsupported: number; reuses: number };
   lint: { error: number; warning: number; info: number };
-  drafts: FicheRow[];
-  recent: FicheRow[];
-  reused: { at: string; title: string; session: string }[];
+  drafts: CardRow[];
+  recent: CardRow[];
+  reused: Recall[];
   inbox: { name: string; size: number; mtime: string; supported: boolean }[];
 }
 
@@ -34,13 +51,17 @@ export interface LogEntry {
   session?: string;
 }
 
-export interface FicheDetail extends FicheRow {
+export interface CardDetail extends CardRow {
   html: string;
   sources: { ref: string; kind: "url" | "session" | "import" | "file"; ok: boolean }[];
   links: { target: string; title: string | null }[];
   backlinks: string[];
   history: LogEntry[];
   revalidation: boolean;
+  body: string;
+  recalls: Recall[];
+  /** The text you had validated, when the agent changed the card since. */
+  previous: { title: string; body: string; tags: string[] } | null;
 }
 
 export interface ActivityDay {
@@ -50,10 +71,14 @@ export interface ActivityDay {
   reused: number;
 }
 
+export const KINDS = ["decision", "fix", "fact", "how-to", "reference"] as const;
+
 export interface Hit {
   title: string;
   status: Status;
   tags: string[];
+  kind?: string | null;
+  project?: string | null;
   summary: string;
   excerpt: string;
   updated?: string;
@@ -67,7 +92,7 @@ export interface Issue {
 }
 
 export interface Graph {
-  nodes: { id: string; status: Status; tag: string; degree: number; orphan: boolean; island: boolean }[];
+  nodes: { id: string; status: Status; tag: string; project: string; kind: string; degree: number; orphan: boolean; island: boolean }[];
   links: { source: string; target: string }[];
   islands: number;
 }
@@ -91,6 +116,7 @@ let version = 0;
 const listeners = new Set<(v: number) => void>();
 let polling = false;
 let seen = "";
+let build = "";
 
 function poll() {
   if (polling) return;
@@ -98,7 +124,10 @@ function poll() {
   const tick = async () => {
     if (!document.hidden) {
       try {
-        const { version: v } = await get<{ version: string }>("/api/version");
+        const { version: v, build: b } = await get<{ version: string; build?: string }>("/api/version");
+        // Stet was updated: load the new interface.
+        if (build && b && b !== build) location.reload();
+        if (b) build = b;
         if (seen && v !== seen) bump();
         seen = v;
       } catch {
@@ -169,11 +198,13 @@ export function hashParams(): URLSearchParams {
   return new URLSearchParams(location.hash.split("?")[1] ?? "");
 }
 
-export const ficheHref = (title: string) => `#/wiki/${encodeURIComponent(title)}`;
-export const reviewHref = (title: string) => `#/review/${encodeURIComponent(title)}`;
+export const cardHref = (title: string) => `#/cards/${encodeURIComponent(title)}`;
+export const reviewHref = (title: string) => `#/inbox/${encodeURIComponent(title)}`;
 
-const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-const timeFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+/** The interface is in English, so dates are too, whatever the browser's language. Day first, as in "2 Nov 2026". */
+export const LOCALE = "en-GB";
+const dateFmt = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short", year: "numeric" });
+const timeFmt = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function formatDay(iso: string): string {
   const d = new Date(iso.length === 10 ? iso + "T00:00:00" : iso);

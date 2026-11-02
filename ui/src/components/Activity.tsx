@@ -1,10 +1,11 @@
+import { LOCALE } from "../api";
 import { useState } from "react";
 import type { ActivityDay } from "../api";
 
-const dayFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
+const dayFmt = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short" });
 const label = (d: string) => dayFmt.format(new Date(d + "T00:00:00"));
 
-/** Fiches written and reused per day. Hover a day for its values; the table view lists them all. */
+/** Cards written and recalled per day. Hover a day for its values; the table view lists them all. */
 export function Activity({ days }: { days: ActivityDay[] }) {
   const [table, setTable] = useState(false);
   const max = Math.max(1, ...days.map((d) => Math.max(d.written, d.reused)));
@@ -21,7 +22,7 @@ export function Activity({ days }: { days: ActivityDay[] }) {
           </span>
           <span>
             <i className="dot" style={{ background: "var(--series-2)" }} />
-            Reused <b className="mono">{reused}</b>
+            Recalled <b className="mono">{reused}</b>
           </span>
         </div>
         <button className="link-button" onClick={() => setTable((t) => !t)}>
@@ -34,7 +35,7 @@ export function Activity({ days }: { days: ActivityDay[] }) {
             <tr>
               <th>Day</th>
               <th>Written</th>
-              <th>Reused</th>
+              <th>Recalled</th>
               <th>Validated</th>
             </tr>
           </thead>
@@ -51,7 +52,7 @@ export function Activity({ days }: { days: ActivityDay[] }) {
         </table>
       ) : (
         <>
-          <div className="chart__bars" style={{ ["--days" as string]: days.length }} role="img" aria-label={`${written} fiches written and ${reused} reused over ${days.length} days`}>
+          <div className="chart__bars" style={{ ["--days" as string]: days.length }} role="img" aria-label={`${written} cards written and ${reused} recalled over ${days.length} days`}>
             {days.map((d) => (
               <div key={d.day} className="chart__day" tabIndex={0}>
                 <span
@@ -63,7 +64,7 @@ export function Activity({ days }: { days: ActivityDay[] }) {
                   style={{ height: `${d.reused ? Math.max(6, (d.reused / max) * 100) : 2}%` }}
                 />
                 <span className="chart__tip">
-                  <b style={{ color: "var(--ink)" }}>{label(d.day)}</b> · {d.written} written · {d.reused} reused
+                  <b style={{ color: "var(--ink)" }}>{label(d.day)}</b> · {d.written} written · {d.reused} recalled
                 </span>
               </div>
             ))}

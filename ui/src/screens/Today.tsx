@@ -1,11 +1,13 @@
-import { ago, ficheHref, formatMoment, useData, type ActivityDay, type Home, type Issue, type LogEntry } from "../api";
+import { LOCALE, ago, cardHref, formatMoment, useData, type ActivityDay, type Home, type Issue, type LogEntry } from "../api";
 import { Button } from "../readout/Button";
 import { InfoTip } from "../readout/InfoTip";
 import { Activity } from "../components/Activity";
 import { IconArrow } from "../components/icons";
 import { SetupBanner } from "./Setup";
+import { openInbox } from "../components/Inbox";
 
-const today = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+const today = new Intl.DateTimeFormat(LOCALE, { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+
 
 export const ACTION: Record<string, string> = {
   create: "Written",
@@ -13,6 +15,10 @@ export const ACTION: Record<string, string> = {
   validate: "Validated",
   unvalidate: "Back to review",
   reject: "Rejected",
+  restore: "Restored",
+  inbox: "Added to the inbox",
+  "inbox-remove": "Removed from the inbox",
+  edit: "Edited",
   tags: "Tags changed",
   import: "Inbox processed",
   "session-note": "Session note",
@@ -20,7 +26,7 @@ export const ACTION: Record<string, string> = {
 };
 
 export const ISSUE: Record<string, string> = {
-  invalid_fiche: "Invalid fiche",
+  invalid_card: "Invalid card",
   broken_link: "Broken link",
   missing_source: "Missing source",
   orphan: "Orphan",
@@ -46,70 +52,97 @@ export function TodayScreen() {
   const groups = [...byCode].slice(0, 5);
 
   return (
-    <div className={`page ${stale ? "is-stale" : ""}`}>
-      <header className="page-head">
-        <div>
-          <h1 className="page-title">Today</h1>
-          <p className="page-sub">{today[0].toUpperCase() + today.slice(1)}</p>
-        </div>
+    <div className={`dash ${stale ? "is-stale" : ""}`}>
+      <header className="dash__head">
+        <h1 className="page-title">Today</h1>
+        <p className="page-sub">{today}</p>
       </header>
 
       <SetupBanner />
 
-      <div className="today-top">
-        <section className="review-callout">
-          <div>
-            <h2 className="ro-eyebrow">To review</h2>
-            <p className="big">
-              {counts.drafts}
-              <small>{counts.drafts === 1 ? "draft" : "drafts"}</small>
-            </p>
-            <p className="page-sub" style={{ marginTop: 12 }}>
-              {counts.drafts
-                ? `Written by your agent. The oldest was written ${oldest ? ago(oldest.updated) : "today"}.`
-                : "Nothing waits for you. New captures land here."}
-            </p>
-          </div>
+      <div className="dash__kpis">
+        <section className="panel panel--accent kpi kpi--review">
+          <h2 className="ro-eyebrow">To review</h2>
+          <p className="big">
+            {counts.drafts}
+            <small>{counts.drafts === 1 ? "draft" : "drafts"}</small>
+          </p>
+          <p className="kpi__sub">
+            {counts.drafts
+              ? `Written by your agent. The oldest was written ${oldest ? ago(oldest.updated) : "today"}.`
+              : "Nothing waits for you. New captures land here."}
+          </p>
           {counts.drafts > 0 && (
-            <div>
-              <Button variant="primary" large onClick={() => (location.hash = "#/review")}>
-                Start review <IconArrow />
-              </Button>
-            </div>
+            <Button variant="primary" onClick={() => (location.hash = "#/inbox")}>
+              Start review <IconArrow />
+            </Button>
           )}
-          <dl className="stats">
-            <div>
-              <dt>Fiches</dt>
-              <dd>{counts.fiches}</dd>
-            </div>
-            <div>
-              <dt>Validated</dt>
-              <dd>{counts.validated}</dd>
-            </div>
-            <div>
-              <dt>Reuses</dt>
-              <dd>{counts.reuses}</dd>
-            </div>
-            <div>
-              <dt>Inbox</dt>
-              <dd>{counts.inbox}</dd>
-            </div>
-          </dl>
         </section>
-
-        <section>
-          <div className="section__head">
-            <div className="section__title">
-              <h2 className="ro-eyebrow">Last 14 days</h2>
-              <InfoTip text="Fiches your agent wrote or changed per day, and reuses: a fiche read in a later session than the one that wrote it." />
-            </div>
+        <a className="panel kpi" href="#/cards">
+          <h2 className="ro-eyebrow">Cards</h2>
+          <p className="kpi__value">{counts.cards}</p>
+          <p className="kpi__sub">{counts.validated} validated</p>
+        </a>
+        <section className="panel kpi">
+          <div className="section__title">
+            <h2 className="ro-eyebrow">Recalled</h2>
+            <InfoTip text="Each time your agent pulled a card into a later session than the one that wrote it: the wiki paying off." />
           </div>
-          {activity && <Activity days={activity} />}
+          <p className="kpi__value">{counts.reuses}</p>
+          <p className="kpi__sub">times your agent used a card in a later session</p>
+        </section>
+        <section className="panel kpi">
+          <a className="ro-eyebrow kpi__link" href="#/inbox">
+            Inbox →
+          </a>
+          <p className="kpi__value">{counts.inbox}</p>
+          <p className="kpi__sub">{counts.inbox ? "files waiting for your agent" : "Drop notes or a link; your agent turns them into cards."}</p>
+          <Button onClick={openInbox}>Add to the inbox</Button>
         </section>
       </div>
 
-      <div className="two-col section">
-        <section>
+      <section className="panel">
+        <div className="section__head">
+          <div className="section__title">
+            <h2 className="ro-eyebrow">Last 14 days</h2>
+            <InfoTip text="Cards your agent wrote or changed per day, and recalls: a card read in a later session than the one that wrote it." />
+          </div>
+        </div>
+        {activity && <Activity days={activity} />}
+      </section>
+
+      <div className="dash__cols">
+        <section className="panel dash__recalls">
+          <div className="section__head">
+            <div className="section__title">
+              <h2 className="ro-eyebrow">Your wiki at work</h2>
+              <InfoTip text="The latest cards your agent pulled into a session: the project it worked in and what it was looking for." />
+            </div>
+          </div>
+          <ul className="list">
+            {home.reused.map((r) => (
+              <li key={`${r.session}-${r.title}`}>
+                <a className="item" href={cardHref(r.title)}>
+                  <span className="item__main">
+                    <span className="item__title">{r.title}</span>
+                    <span className="item__sub">
+                      {r.query ? `“${r.query}”` : "no search recorded"}
+                      {r.project ? ` · in ${r.project}` : ""}
+                    </span>
+                  </span>
+                  <span className="item__meta">{formatMoment(r.at)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          {!home.reused.length && (
+            <p className="empty">
+              Nothing yet. When your agent searches the wiki in a later session and uses a card, it shows here, with the project and
+              the question.
+            </p>
+          )}
+        </section>
+        <section className="panel">
           <div className="section__head">
             <div className="section__title">
               <h2 className="ro-eyebrow">Needs attention</h2>
@@ -136,7 +169,7 @@ export function TodayScreen() {
             {groups.map(([code, items]) => (
               <li key={code}>
                 {items.length === 1 && items[0].target && !items[0].target.includes("/") ? (
-                  <a className="item" href={ficheHref(items[0].target)}>
+                  <a className="item" href={cardHref(items[0].target)}>
                     <span className="item__main">
                       <span className="item__title">{items[0].target}</span>
                       <span className="item__sub">{items[0].message}</span>
@@ -160,18 +193,18 @@ export function TodayScreen() {
           {!home.inbox.length && !attention.length && <p className="empty">Nothing needs your attention.</p>}
         </section>
 
-        <section>
+        <section className="panel">
           <div className="section__head">
             <h2 className="ro-eyebrow">Recent changes</h2>
-            <a className="ro-link" href="#/checks">
-              Log →
+            <a className="ro-link" href="#/checks?tab=log">
+              All changes →
             </a>
           </div>
           <ul className="list">
             {(log ?? []).slice(0, 7).map((e, n) => (
               <li key={n}>
                 {e.title ? (
-                  <a className="item" href={ficheHref(e.title)}>
+                  <a className="item" href={cardHref(e.title)}>
                     <span className="item__main">
                       <span className="item__title">{e.title}</span>
                       <span className="item__sub">{ACTION[e.action] ?? e.action}{e.session === "user" ? " by you" : e.session ? " by your agent" : ""}</span>
