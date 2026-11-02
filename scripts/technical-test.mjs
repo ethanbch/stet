@@ -20,10 +20,10 @@ const STEPS = [
       "We just decided to use PostgreSQL instead of SQLite for the billing service, because billing needs concurrent writes from several workers. Keep this in Stet.",
     check: (v) => {
       const notes = fs.readdirSync(v.abs("sources/sessions"));
-      const f = v.fiches().find((x) => /postgres/i.test(x.fm.title + x.body));
+      const f = v.cards().find((x) => /postgres/i.test(x.fm.title + x.body));
       return {
         ok: notes.length >= 1 && !!f && f.fm.sources.some((s) => s.startsWith("sources/sessions/")),
-        detail: `${notes.length} session note(s); fiche: ${f ? `"${f.fm.title}" citing ${f.fm.sources.join(", ")}` : "none"}`,
+        detail: `${notes.length} session note(s); card: ${f ? `"${f.fm.title}" citing ${f.fm.sources.join(", ")}` : "none"}`,
       };
     },
   },
@@ -37,10 +37,10 @@ const STEPS = [
     prompt: "Process the Stet inbox.",
     check: (v) => {
       const left = v.inbox().length;
-      const f = v.fiches().find((x) => x.fm.sources.some((s) => s.startsWith("sources/imports/")));
+      const f = v.cards().find((x) => x.fm.sources.some((s) => s.startsWith("sources/imports/")));
       return {
         ok: left === 0 && !!f,
-        detail: `${left} item(s) left in the inbox; fiche from the import: ${f ? `"${f.fm.title}"` : "none"}`,
+        detail: `${left} item(s) left in the inbox; card from the import: ${f ? `"${f.fm.title}"` : "none"}`,
       };
     },
   },
