@@ -14,9 +14,22 @@ beforeEach(() => {
   vault = new Vault(fs.mkdtempSync(path.join(os.tmpdir(), "stet-web-")));
   vault.init();
   const agent = { session: "s-2026-10-30-aaaaaa" };
-  vault.writeFiche({ title: "A", body: "Alpha.", sources: ["https://a.b"], tags: ["t"] }, agent);
-  vault.writeFiche({ title: "B", body: "Links [[A]].", sources: ["https://a.b"], tags: ["t", "u"] }, agent);
+  vault.writeCard({ title: "A", body: "Alpha.", sources: ["https://a.b"], tags: ["t"] }, agent);
+  vault.writeCard({ title: "B", body: "Links [[A]].", sources: ["https://a.b"], tags: ["t", "u"] }, agent);
   app = createApp(vault, 4747);
+});
+
+describe("routes", () => {
+  it("answers an unknown API route with a JSON 404, not the page", async () => {
+    const r = await app.request("/api/nothing-here", { headers: H });
+    expect(r.status).toBe(404);
+    expect(r.headers.get("content-type")).toContain("application/json");
+  });
+
+  it("reports a build stamp so an open page reloads after an update", async () => {
+    const v = await (await app.request("/api/version", { headers: H })).json();
+    expect(Number(v.build)).toBeGreaterThan(0);
+  });
 });
 
 describe("local security", () => {
@@ -28,22 +41,22 @@ describe("local security", () => {
 
   it("requires a same-origin JSON request to change anything", async () => {
     const body = JSON.stringify({ title: "A", status: "validated" });
-    expect((await app.request("/api/fiche/status", { method: "POST", headers: H, body })).status).toBe(403);
+    expect((await app.request("/api/card/status", { method: "POST", headers: H, body })).status).toBe(403);
     expect(
-      (await app.request("/api/fiche/status", { method: "POST", headers: { ...O, "content-type": "text/plain" }, body })).status,
+      (await app.request("/api/card/status", { method: "POST", headers: { ...O, "content-type": "text/plain" }, body })).status,
     ).toBe(415);
-    expect((await app.request("/api/fiche/status", { method: "POST", headers: O, body })).status).toBe(200);
+    expect((await app.request("/api/card/status", { method: "POST", headers: O, body })).status).toBe(200);
     expect(vault.resolve("A")!.fm.status).toBe("validated");
   });
 });
 
 describe("API", () => {
-  it("serves home, fiche, graph, search, tags and lint", async () => {
+  it("serves home, card, graph, search, tags and lint", async () => {
     const home = await (await app.request("/api/home", { headers: H })).json();
-    expect(home.counts).toMatchObject({ fiches: 2, drafts: 2 });
-    const a = await (await app.request("/api/fiche?title=a", { headers: H })).json();
+    expect(home.counts).toMatchObject({ cards: 2, drafts: 2 });
+    const a = await (await app.request("/api/card?title=a", { headers: H })).json();
     expect(a.backlinks).toEqual(["B"]);
-    const b = await (await app.request("/api/fiche?title=B", { headers: H })).json();
+    const b = await (await app.request("/api/card?title=B", { headers: H })).json();
     expect(b.html).toContain('href="#/wiki/A"');
     const g = await (await app.request("/api/graph", { headers: H })).json();
     expect(g.links).toEqual([{ source: "B", target: "A" }]);
@@ -55,11 +68,11 @@ describe("API", () => {
     expect(Array.isArray(await (await app.request("/api/lint", { headers: H })).json())).toBe(true);
   });
 
-  it("changes tags and rejects fiches, never the body", async () => {
-    await app.request("/api/fiche/tags", { method: "POST", headers: O, body: JSON.stringify({ title: "A", tags: ["x", "Y"] }) });
+  it("changes tags and rejects cards, never the body", async () => {
+    await app.request("/api/card/tags", { method: "POST", headers: O, body: JSON.stringify({ title: "A", tags: ["x", "Y"] }) });
     expect(vault.resolve("A")!.fm.tags).toEqual(["x", "y"]);
     expect(vault.resolve("A")!.body.trim()).toBe("Alpha.");
-    await app.request("/api/fiche/reject", { method: "POST", headers: O, body: JSON.stringify({ title: "A" }) });
+    await app.request("/api/card/reject", { method: "POST", headers: O, body: JSON.stringify({ title: "A" }) });
     expect(vault.resolve("A")).toBeUndefined();
     expect(fs.readdirSync(vault.abs(".stet/rejected")).length).toBe(1);
   });
@@ -73,7 +86,7 @@ describe("API", () => {
 describe("setup", () => {
   it("reports each first-run step from the files", async () => {
     let s = await (await app.request("/api/setup", { headers: H })).json();
-    expect(s).toMatchObject({ agent: null, fiches: 2, validated: 0 });
+    expect(s).toMatchObject({ agent: null, cards: 2, validated: 0 });
     vault.recordAgentSession("s-2026-10-30-cccccc", "/home/me/project");
     vault.setStatus("A", "validated", { session: "user" });
     s = await (await app.request("/api/setup", { headers: H })).json();

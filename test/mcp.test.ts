@@ -41,7 +41,7 @@ describe("MCP server", () => {
   it("exposes the ten tools and instructions", async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ["complete_item", "index", "lint", "log", "queue_next", "read", "search", "status", "write_fiche", "write_session_note"].sort(),
+      ["complete_item", "index", "lint", "log", "queue_next", "read", "search", "status", "write_card", "write_session_note"].sort(),
     );
     expect(client.getInstructions()).toContain("propose once per session");
   });
@@ -55,18 +55,18 @@ describe("MCP server", () => {
     expect(q.data.item).toBe("standup.md");
     expect(q.data.chunk).toContain("Friday");
 
-    const refused = await call("write_fiche", { title: "Release date", body: "Friday.", sources: [], tags: [] });
+    const refused = await call("write_card", { title: "Release date", body: "Friday.", sources: [], tags: [] });
     expect(refused.isError).toBe(true);
     expect(refused.text).toContain("at least one source");
 
-    const ok = await call("write_fiche", {
+    const ok = await call("write_card", {
       title: "Release date",
       body: "The release moved to Friday: QA needs two more days.",
       sources: [q.data.cite_as],
       tags: ["release"],
     });
     expect(ok.isError).toBe(false);
-    expect((await call("complete_item", { item: "standup.md", fiches: ["Release date"] })).isError).toBe(false);
+    expect((await call("complete_item", { item: "standup.md", cards: ["Release date"] })).isError).toBe(false);
     expect((await call("queue_next")).data.empty).toBe(true);
   });
 
@@ -77,7 +77,7 @@ describe("MCP server", () => {
       artefacts: ["https://example.com/ticket/42"],
     });
     expect(n.data.path).toMatch(/^sources\/sessions\//);
-    const w = await call("write_fiche", {
+    const w = await call("write_card", {
       title: "QA reviewers",
       body: "Two QA reviewers per release. Context: [[Release date]].",
       sources: [n.data.path, "https://example.com/ticket/42"],

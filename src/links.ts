@@ -29,7 +29,7 @@ export function extractLinks(md: string): WikiLink[] {
   return out;
 }
 
-/** Turns [[links]] into anchors. `resolve` returns the fiche title for a target, or undefined when missing. */
+/** Turns [[links]] into anchors. `resolve` returns the card title for a target, or undefined when missing. */
 function remarkWikiLinks(resolve: (target: string) => string | undefined) {
   return () => (tree: Root) => {
     visit(tree, "text", (node: Text, index, parent: Parent | undefined) => {
@@ -57,7 +57,7 @@ function remarkWikiLinks(resolve: (target: string) => string | undefined) {
   };
 }
 
-/** Markdown to HTML for the reader. Raw HTML in fiches is dropped, never rendered. */
+/** Markdown to HTML for the reader. Raw HTML in cards is dropped, never rendered. */
 export function renderMarkdown(md: string, resolve: (target: string) => string | undefined): string {
   const file = unified()
     .use(remarkParse)

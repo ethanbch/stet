@@ -11,6 +11,11 @@ export function claudeDir(): string {
 }
 
 /** Absolute command that runs this installation of Stet, independent of PATH. */
+/** True when this copy runs from npx's cache (~/.npm/_npx/…), which npm may delete. */
+export function runFromNpxCache(): boolean {
+  return selfCommand().cli.split(path.sep).includes("_npx");
+}
+
 export function selfCommand(): { node: string; cli: string } {
   const here = path.dirname(new URL(import.meta.url).pathname);
   // From the sources (tests, dev) the built CLI lives in ../dist.

@@ -8,16 +8,22 @@ export const LAYOUT = {
   sources: "sources",
   imports: "sources/imports",
   sessions: "sources/sessions",
-  fiches: "fiches",
+  cards: "cards",
   index: "index.md",
   log: "log.md",
   agents: "AGENTS.md",
   state: ".stet",
   config: ".stet/config.toml",
   rejected: ".stet/rejected",
+  /** Inbox files you took out from the interface. */
+  removed: ".stet/removed",
+  /** The last validated text of cards the agent changed since, for the review diff. */
+  validated: ".stet/validated",
   usage: ".stet/usage.jsonl",
   imported: ".stet/imports.json",
   agent: ".stet/agent.json",
+  /** The projects cards can belong to. Cards' own project values are added to it when read. */
+  projects: ".stet/projects.json",
 } as const;
 
 export interface StetConfig {

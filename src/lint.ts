@@ -1,11 +1,11 @@
-import { looseKey, titleKey } from "./fiche.js";
+import { looseKey, titleKey } from "./card.js";
 import type { Vault } from "./vault.js";
 
 export type Severity = "error" | "warning" | "info";
 
 export interface Issue {
   code:
-    | "invalid_fiche"
+    | "invalid_card"
     | "broken_link"
     | "missing_source"
     | "orphan"
@@ -16,7 +16,7 @@ export interface Issue {
     | "stale_draft";
   severity: Severity;
   message: string;
-  /** Fiche title, or a vault path for files that are not valid fiches. */
+  /** Card title, or a vault path for files that are not valid cards. */
   target?: string;
 }
 
@@ -44,22 +44,31 @@ function similar(a: string, b: string): boolean {
 export function lint(vault: Vault, now = Date.now()): Issue[] {
   const issues: Issue[] = [];
   vault.refresh();
-  const fiches = vault.fiches();
+  const cards = vault.cards();
 
   for (const bad of vault.invalidFiles())
     issues.push({
-      code: "invalid_fiche",
+      code: "invalid_card",
       severity: "error",
       message: `${bad.path}: ${bad.problems.map((p) => `${p.field}: ${p.message}`).join("; ")}`,
       target: bad.path,
     });
 
   const inbound = new Map<string, number>();
-  for (const f of fiches) {
+  const rejected = vault.rejectedTitles();
+  for (const f of cards) {
     for (const l of vault.linksOf(f)) {
       const to = vault.resolve(l.target);
       if (!to) {
-        issues.push({ code: "broken_link", severity: "error", message: `[[${l.target}]] points to no fiche`, target: f.fm.title });
+        const gone = rejected.get(titleKey(l.target));
+        issues.push({
+          code: "broken_link",
+          severity: "error",
+          message: gone
+            ? `[[${l.target}]] points to a card you rejected; remove the link, or restore the card from Checks`
+            : `[[${l.target}]] points to no card`,
+          target: f.fm.title,
+        });
       } else if (to.path !== f.path) {
         inbound.set(to.path, (inbound.get(to.path) ?? 0) + 1);
       }
@@ -80,13 +89,13 @@ export function lint(vault: Vault, now = Date.now()): Issue[] {
     }
   }
 
-  if (fiches.length > 1)
-    for (const f of fiches)
+  if (cards.length > 1)
+    for (const f of cards)
       if (!inbound.get(f.path))
-        issues.push({ code: "orphan", severity: "warning", message: "no other fiche links here", target: f.fm.title });
+        issues.push({ code: "orphan", severity: "warning", message: "no other card links here", target: f.fm.title });
 
   const seen: { key: string; title: string }[] = [];
-  for (const f of fiches) {
+  for (const f of cards) {
     const key = looseKey(f.fm.title);
     const twin = seen.find((s) => similar(s.key, key) && titleKey(s.title) !== titleKey(f.fm.title));
     if (twin)
@@ -100,7 +109,7 @@ export function lint(vault: Vault, now = Date.now()): Issue[] {
   }
 
   if (!vault.indexInSync())
-    issues.push({ code: "index_out_of_sync", severity: "warning", message: "index.md does not match the fiches; run `stet lint --fix`" });
+    issues.push({ code: "index_out_of_sync", severity: "warning", message: "index.md does not match the cards; run `stet lint --fix`" });
 
   for (const item of vault.inbox()) {
     if (!item.supported) {

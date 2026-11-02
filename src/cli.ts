@@ -35,14 +35,14 @@ program
   .description("Inbox, drafts and lint summary")
   .action(() => {
     const vault = openVault();
-    const fiches = vault.fiches();
+    const cards = vault.cards();
     const issues = lint(vault);
     const inbox = vault.inbox();
     console.log(`Wiki       ${vault.root}`);
-    console.log(`Fiches     ${fiches.length} (${fiches.filter((f) => f.fm.status === "draft").length} to review)`);
+    console.log(`Cards      ${cards.length} (${cards.filter((f) => f.fm.status === "draft").length} to review)`);
     console.log(`Inbox      ${inbox.filter((i) => i.supported).length} waiting, ${inbox.filter((i) => !i.supported).length} unsupported`);
     console.log(`Lint       ${issues.filter((i) => i.severity === "error").length} errors, ${issues.filter((i) => i.severity === "warning").length} warnings`);
-    console.log(`Reuses     ${vault.reuse().total}`);
+    console.log(`Recalled   ${vault.reuse().total}`);
   });
 
 program
@@ -140,6 +140,11 @@ program
   .option("--no-launchd", "do not set up the on-demand start")
   .action(async (opts: { adapter: boolean; launchd?: boolean }) => {
     const connect = await import("./connect.js");
+    // Claude Code and launchd start Stet by path. A copy run through npx lives in npm's cache, which npm may clear.
+    if (connect.runFromNpxCache()) {
+      console.error("Stet must stay installed for Claude Code to start it. Install it, then connect:\n\n  npm install -g stet && stet connect\n");
+      process.exit(1);
+    }
     const vault = new Vault(vaultRoot());
     if (!vault.isInitialized()) {
       vault.init();
@@ -203,12 +208,15 @@ hook
         console.log("Stet: capture is disabled in this folder. Do not propose or write anything to the Stet wiki in this session.");
         return;
       }
-      const fiches = vault.fiches();
-      const drafts = fiches.filter((f) => f.fm.status === "draft").length;
+      const cards = vault.cards();
+      const drafts = cards.filter((f) => f.fm.status === "draft").length;
       const waiting = vault.inbox().filter((i) => i.supported).length;
-      const lines = [`Stet wiki: ${fiches.length} fiches, ${drafts} waiting for the user's review, ${waiting} inbox items to process.`];
+      const lines = [`Stet wiki: ${cards.length} cards, ${drafts} waiting for the user's review, ${waiting} inbox items to process.`];
       lines.push("When this session produces a durable decision, fix or fact, propose once to keep it in Stet (stet skill). Search Stet before answering questions it may cover.");
-      if (waiting) lines.push(`Mention the ${waiting} waiting inbox item(s) to the user if they ask what to do, or at a natural pause.`);
+      if (waiting)
+        lines.push(
+          `${waiting} file(s) wait in the Stet inbox. The user expects them processed automatically: before their first request, run the stet skill's "Process the inbox" loop (queue_next, write_card, complete_item), then tell them in one line what the files became.`,
+        );
       console.log(lines.join("\n"));
     } catch {
       // a hook must never break a session

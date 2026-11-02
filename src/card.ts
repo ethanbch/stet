@@ -4,6 +4,10 @@ import { z } from "zod";
 export const STATUSES = ["draft", "validated"] as const;
 export type Status = (typeof STATUSES)[number];
 
+/** What a card holds. The agent picks one when it writes; the user can change it. */
+export const KINDS = ["decision", "fix", "fact", "how-to", "reference"] as const;
+export type Kind = (typeof KINDS)[number];
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** gray-matter turns `2026-10-30` into a Date; bring it back to a plain day. */
@@ -19,6 +23,9 @@ export const FrontmatterSchema = z.object({
   status: z.enum(STATUSES, { message: `status must be one of: ${STATUSES.join(", ")}` }),
   sources: z.array(nonEmpty, { message: "sources must be a list" }).min(1, "at least one source is required"),
   tags: z.array(nonEmpty, { message: "tags must be a list" }).min(1, "at least one tag is required"),
+  kind: z.enum(KINDS, { message: `kind must be one of: ${KINDS.join(", ")}` }).optional(),
+  /** The project the card belongs to: one of the wiki's projects (`.stet/projects.json`). */
+  project: nonEmpty.max(60).optional(),
   created: day,
   updated: day,
   session: z.string().optional(),
@@ -32,8 +39,8 @@ export interface Problem {
   message: string;
 }
 
-export interface Fiche {
-  /** Path relative to the vault root, e.g. `fiches/Search engine.md`. */
+export interface Card {
+  /** Path relative to the vault root, e.g. `cards/Search engine.md`. */
   path: string;
   fm: Frontmatter;
   body: string;
@@ -43,7 +50,7 @@ export interface Fiche {
 }
 
 export interface ParsedFile {
-  fiche?: Fiche;
+  card?: Card;
   problems: Problem[];
   title?: string;
 }
@@ -54,7 +61,7 @@ export function zodProblems(err: z.ZodError): Problem[] {
   return err.issues.map((i) => ({ field: i.path.join(".") || "frontmatter", message: i.message }));
 }
 
-export function parseFiche(text: string, relPath: string, mtimeMs = 0): ParsedFile {
+export function parseCard(text: string, relPath: string, mtimeMs = 0): ParsedFile {
   let parsed: matter.GrayMatterFile<string>;
   try {
     // gray-matter caches by content; pass an empty options object to avoid shared mutable results.
@@ -69,7 +76,7 @@ export function parseFiche(text: string, relPath: string, mtimeMs = 0): ParsedFi
   const extra: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) if (!KNOWN.has(k)) extra[k] = v;
   return {
-    fiche: { path: relPath, fm: res.data, body: parsed.content.replace(/^\n+/, ""), extra, mtimeMs },
+    card: { path: relPath, fm: res.data, body: parsed.content.replace(/^\n+/, ""), extra, mtimeMs },
     problems: [],
     title,
   };
@@ -82,10 +89,12 @@ function yamlScalar(s: string): string {
 }
 
 /** Stable, readable frontmatter: known fields in a fixed order, extra fields after. */
-export function serializeFiche(fm: Frontmatter, body: string, extra: Record<string, unknown> = {}): string {
+export function serializeCard(fm: Frontmatter, body: string, extra: Record<string, unknown> = {}): string {
   const lines = ["---", `title: ${yamlScalar(fm.title)}`, `status: ${fm.status}`, "sources:"];
   for (const s of fm.sources) lines.push(`  - ${yamlScalar(s)}`);
   lines.push(`tags: [${fm.tags.map(yamlScalar).join(", ")}]`);
+  if (fm.kind) lines.push(`kind: ${fm.kind}`);
+  if (fm.project) lines.push(`project: ${yamlScalar(fm.project)}`);
   lines.push(`created: ${fm.created}`, `updated: ${fm.updated}`);
   if (fm.session) lines.push(`session: ${yamlScalar(fm.session)}`);
   if (fm.summary) lines.push(`summary: ${yamlScalar(fm.summary)}`);
@@ -95,7 +104,7 @@ export function serializeFiche(fm: Frontmatter, body: string, extra: Record<stri
 }
 
 /** File name for a title. Obsidian resolves [[Title]] by file name, so they match as closely as possible. */
-export function ficheFileName(title: string): string {
+export function cardFileName(title: string): string {
   const cleaned = title
     .replace(/[\/\\:*?"<>|#^\[\]]/g, "-")
     .replace(/\s+/g, " ")
@@ -127,7 +136,7 @@ export function isExternalSource(s: string): boolean {
   return /^[a-z][a-z0-9+.-]*:/i.test(s);
 }
 
-export function summaryOf(f: Fiche): string {
+export function summaryOf(f: Card): string {
   if (f.fm.summary) return f.fm.summary;
   const line = f.body
     .split("\n")

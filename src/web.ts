@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { Hono, type Context } from "hono";
 import { createAdaptorServer } from "@hono/node-server";
 import { LAYOUT } from "./config.js";
-import { STATUSES, isExternalSource, summaryOf, type Fiche, type Status } from "./fiche.js";
+import { KINDS, STATUSES, isExternalSource, summaryOf, type Card, type Status } from "./card.js";
 import { renderMarkdown } from "./links.js";
 import { lint } from "./lint.js";
 import { search } from "./search.js";
@@ -29,6 +30,13 @@ const MIME: Record<string, string> = {
   ".ttf": "font/ttf",
 };
 
+const SELF = fileURLToPath(import.meta.url);
+
+/** When this copy of Stet was built: the newest of the server code and the interface. */
+function buildStamp(): string {
+  return String(Math.max(at(SELF), at(path.join(UI_DIR, "index.html"))));
+}
+
 export interface ServeOptions {
   port: number;
   /** Listen on an inherited socket (launchd passes it as fd 0). */
@@ -38,18 +46,20 @@ export interface ServeOptions {
   quiet?: boolean;
 }
 
-function originOf(f: Fiche): "session" | "import" | "link" {
+function originOf(f: Card): "session" | "import" | "link" {
   if (f.fm.sources.some((s) => s.includes("/sessions/"))) return "session";
   if (f.fm.sources.some((s) => s.includes("/imports/"))) return "import";
   return "link";
 }
 
-function ficheRow(v: Vault, f: Fiche, reuses: Map<string, number>) {
+function cardRow(v: Vault, f: Card, reuses: Map<string, number>) {
   return {
     origin: originOf(f),
     title: f.fm.title,
     status: f.fm.status,
     tags: f.fm.tags,
+    kind: f.fm.kind ?? null,
+    project: f.fm.project ?? null,
     created: f.fm.created,
     updated: f.fm.updated,
     summary: summaryOf(f),
@@ -87,18 +97,18 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
   });
 
   app.get("/api/home", (c) => {
-    const fiches = vault.fiches();
+    const cards = vault.cards();
     const reuse = vault.reuse();
     const issues = lint(vault);
     const inbox = vault.inbox();
-    const byUpdated = [...fiches].sort((a, b) => b.fm.updated.localeCompare(a.fm.updated) || b.mtimeMs - a.mtimeMs);
+    const byUpdated = [...cards].sort((a, b) => b.fm.updated.localeCompare(a.fm.updated) || b.mtimeMs - a.mtimeMs);
     const home = os.homedir();
     return c.json({
       wiki: vault.root.startsWith(home + path.sep) ? "~" + vault.root.slice(home.length) : vault.root,
       counts: {
-        fiches: fiches.length,
-        drafts: fiches.filter((f) => f.fm.status === "draft").length,
-        validated: fiches.filter((f) => f.fm.status === "validated").length,
+        cards: cards.length,
+        drafts: cards.filter((f) => f.fm.status === "draft").length,
+        validated: cards.filter((f) => f.fm.status === "validated").length,
         inbox: inbox.filter((i) => i.supported).length,
         unsupported: inbox.filter((i) => !i.supported).length,
         reuses: reuse.total,
@@ -108,8 +118,8 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
         warning: issues.filter((i) => i.severity === "warning").length,
         info: issues.filter((i) => i.severity === "info").length,
       },
-      drafts: byUpdated.filter((f) => f.fm.status === "draft").slice(0, 20).map((f) => ficheRow(vault, f, reuse.byTitle)),
-      recent: byUpdated.slice(0, 5).map((f) => ficheRow(vault, f, reuse.byTitle)),
+      drafts: byUpdated.filter((f) => f.fm.status === "draft").slice(0, 20).map((f) => cardRow(vault, f, reuse.byTitle)),
+      recent: byUpdated.slice(0, 5).map((f) => cardRow(vault, f, reuse.byTitle)),
       reused: reuse.recent.slice(0, 8),
       inbox: inbox.map((i) => ({ name: i.name, size: i.size, mtime: new Date(i.mtimeMs).toISOString(), supported: i.supported })),
     });
@@ -136,7 +146,7 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
 
   // State of each first-run step, computed from the files: the guide never asks "did you do it?".
   app.get("/api/setup", async (c) => {
-    const fiches = vault.fiches();
+    const cards = vault.cards();
     const count = (dir: string) => {
       try {
         return fs.readdirSync(vault.abs(dir)).filter((n) => !n.startsWith(".")).length;
@@ -150,10 +160,10 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     return c.json({
       wiki: short(vault.root),
       agent: vault.agentInfo() ?? null,
-      fiches: fiches.length,
+      cards: cards.length,
       sessionNotes: count(LAYOUT.sessions),
-      validated: fiches.filter((f) => f.fm.status === "validated").length,
-      drafts: fiches.filter((f) => f.fm.status === "draft").length,
+      validated: cards.filter((f) => f.fm.status === "validated").length,
+      drafts: cards.filter((f) => f.fm.status === "draft").length,
       imports: count(LAYOUT.imports),
       inbox: vault.inbox().length,
       excluded: vault.config.excluded.length,
@@ -178,19 +188,20 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     return c.json({ ok: true });
   });
 
-  app.get("/api/fiches", (c) => {
+  app.get("/api/cards", (c) => {
     const reuse = vault.reuse();
-    return c.json(vault.fiches().map((f) => ficheRow(vault, f, reuse.byTitle)));
+    return c.json(vault.cards().map((f) => cardRow(vault, f, reuse.byTitle)));
   });
 
-  app.get("/api/fiche", (c) => {
+  app.get("/api/card", (c) => {
     const f = vault.resolve(c.req.query("title") ?? "");
     if (!f) return c.json({ error: "not found" }, 404);
     const resolve = (t: string) => vault.resolve(t)?.fm.title;
     const reuse = vault.reuse();
     return c.json({
-      ...ficheRow(vault, f, reuse.byTitle),
+      ...cardRow(vault, f, reuse.byTitle),
       html: renderMarkdown(f.body, resolve),
+      body: f.body,
       sources: f.fm.sources.map((s) => {
         if (isExternalSource(s)) return { ref: s, kind: "url", ok: true };
         const kind = s.includes("/sessions/") ? "session" : s.includes("/imports/") ? "import" : "file";
@@ -198,13 +209,17 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
       }),
       links: vault.linksOf(f).map((l) => ({ target: l.target, title: resolve(l.target) ?? null })),
       backlinks: vault.backlinks(f).map((b) => b.fm.title),
+      // Later sessions where the agent pulled this card in, newest first.
+      recalls: (reuse.byCard.get(f.fm.title) ?? []).slice(0, 12),
       history: vault.readLog().filter((e) => e.title === f.fm.title).reverse(),
-      // The agent changed a fiche you had validated: say so in the review.
+      // The agent changed a card you had validated: say so in the review.
       revalidation: (() => {
         const h = vault.readLog().filter((e) => e.title === f.fm.title);
         const lastValidate = h.map((e) => e.action).lastIndexOf("validate");
         return f.fm.status === "draft" && lastValidate >= 0 && h.slice(lastValidate).some((e) => e.action === "update");
       })(),
+      // What the user had validated, when the agent changed the card since.
+      previous: f.fm.status === "draft" ? (vault.previousValidated(f) ?? null) : null,
     });
   });
 
@@ -222,33 +237,41 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     const q = (c.req.query("q") ?? "").trim();
     const tag = c.req.query("tag");
     const status = c.req.query("status");
-    let fiches = vault.fiches();
-    if (tag) fiches = fiches.filter((f) => f.fm.tags.includes(tag));
-    if (status) fiches = fiches.filter((f) => f.fm.status === status);
+    let cards = vault.cards();
+    if (tag) cards = cards.filter((f) => f.fm.tags.includes(tag));
+    const project = c.req.query("project");
+    if (project === "-") cards = cards.filter((f) => !f.fm.project);
+    else if (project) cards = cards.filter((f) => f.fm.project === project);
+    const kind = c.req.query("kind");
+    if (kind) cards = cards.filter((f) => f.fm.kind === kind);
+    if (status) cards = cards.filter((f) => f.fm.status === status);
     if (!q) {
       const reuse = vault.reuse();
       return c.json(
-        fiches.map((f) => ({ ...ficheRow(vault, f, reuse.byTitle), score: 0, excerpt: summaryOf(f) })),
+        cards.map((f) => ({ ...cardRow(vault, f, reuse.byTitle), score: 0, excerpt: summaryOf(f) })),
       );
     }
-    const byTitle = new Map(fiches.map((f) => [f.fm.title, f]));
+    const byTitle = new Map(cards.map((f) => [f.fm.title, f]));
     return c.json(
-      search(fiches, q, 100).map((h) => ({ ...h, updated: byTitle.get(h.title)?.fm.updated })),
+      search(cards, q, 100).map((h) => {
+        const f = byTitle.get(h.title);
+        return { ...h, updated: f?.fm.updated, kind: f?.fm.kind ?? null, project: f?.fm.project ?? null };
+      }),
     );
   });
 
   app.get("/api/tags", (c) => {
     const counts = new Map<string, number>();
-    for (const f of vault.fiches()) for (const t of f.fm.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
+    for (const f of vault.cards()) for (const t of f.fm.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     return c.json([...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag)));
   });
 
   app.get("/api/graph", (c) => {
-    const fiches = vault.fiches();
+    const cards = vault.cards();
     const links: { source: string; target: string }[] = [];
     const degree = new Map<string, number>();
     const inbound = new Map<string, number>();
-    for (const f of fiches)
+    for (const f of cards)
       for (const l of vault.linksOf(f)) {
         const to = vault.resolve(l.target);
         if (!to || to.path === f.path) continue;
@@ -259,19 +282,21 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
         inbound.set(to.fm.title, (inbound.get(to.fm.title) ?? 0) + 1);
       }
     // Islands: connected components, so the interface can show isolated groups.
-    const parent = new Map(fiches.map((f) => [f.fm.title, f.fm.title]));
+    const parent = new Map(cards.map((f) => [f.fm.title, f.fm.title]));
     const find = (x: string): string => (parent.get(x) === x ? x : find(parent.get(x)!));
     for (const l of links) parent.set(find(l.source), find(l.target));
     const sizes = new Map<string, number>();
-    for (const f of fiches) sizes.set(find(f.fm.title), (sizes.get(find(f.fm.title)) ?? 0) + 1);
+    for (const f of cards) sizes.set(find(f.fm.title), (sizes.get(find(f.fm.title)) ?? 0) + 1);
     const largest = Math.max(0, ...sizes.values());
     return c.json({
-      nodes: fiches.map((f) => ({
+      nodes: cards.map((f) => ({
         id: f.fm.title,
         status: f.fm.status,
         tag: f.fm.tags[0],
+        project: f.fm.project ?? "No project",
+        kind: f.fm.kind ?? "No kind",
         degree: degree.get(f.fm.title) ?? 0,
-        orphan: fiches.length > 1 && !inbound.get(f.fm.title),
+        orphan: cards.length > 1 && !inbound.get(f.fm.title),
         island: sizes.get(find(f.fm.title))! < largest,
       })),
       links,
@@ -286,29 +311,112 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
     return c.json(vault.readLog().reverse().slice(0, limit));
   });
 
-  app.post("/api/fiche/status", async (c) => {
+  app.post("/api/card/status", async (c) => {
     const b = await body<{ title: string; status: Status }>(c);
     if (!b || !STATUSES.includes(b.status)) return c.json({ ok: false, problems: [{ field: "status", message: "invalid status" }] }, 400);
     const r = vault.setStatus(b.title, b.status, USER);
     return c.json(r, r.ok ? 200 : 400);
   });
 
-  app.post("/api/fiche/tags", async (c) => {
+  app.get("/api/projects", (c) => {
+    const cards = vault.cards();
+    return c.json({
+      projects: vault.projects().map((name) => ({ name, count: cards.filter((f) => f.fm.project === name).length })),
+      none: cards.filter((f) => !f.fm.project).length,
+      kinds: KINDS.map((k) => ({ name: k, count: cards.filter((f) => f.fm.kind === k).length })),
+    });
+  });
+
+  app.post("/api/projects", async (c) => {
+    const b = await body<{ name: string }>(c);
+    if (!b || typeof b.name !== "string") return c.json({ ok: false }, 400);
+    const r = vault.addProject(b.name, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  app.post("/api/card/meta", async (c) => {
+    const b = await body<{ title: string; kind?: string | null; project?: string | null }>(c);
+    if (!b || typeof b.title !== "string") return c.json({ ok: false }, 400);
+    const r = vault.setMeta(b.title, { kind: b.kind, project: b.project }, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  app.post("/api/card/tags", async (c) => {
     const b = await body<{ title: string; tags: string[] }>(c);
     if (!b || !Array.isArray(b.tags)) return c.json({ ok: false, problems: [{ field: "tags", message: "invalid tags" }] }, 400);
     const r = vault.setTags(b.title, b.tags, USER);
     return c.json(r, r.ok ? 200 : 400);
   });
 
-  app.post("/api/fiche/reject", async (c) => {
+  app.post("/api/card/body", async (c) => {
+    const b = await body<{ title: string; body: string; base?: string }>(c);
+    if (!b || typeof b.title !== "string" || typeof b.body !== "string") return c.json({ ok: false }, 400);
+    const r = vault.editBody(b.title, b.body, b.base, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  app.post("/api/card/reject", async (c) => {
     const b = await body<{ title: string }>(c);
     if (!b) return c.json({ ok: false }, 400);
     const r = vault.reject(b.title, USER);
     return c.json(r, r.ok ? 200 : 400);
   });
 
+  app.get("/api/inbox", (c) =>
+    c.json({
+      waiting: vault.inbox().map((i) => ({ name: i.name, size: i.size, mtime: new Date(i.mtimeMs).toISOString(), supported: i.supported })),
+    }),
+  );
+
+  app.get("/api/inbox/file", (c) => {
+    const content = vault.readInbox(c.req.query("name") ?? "");
+    return content === undefined ? c.json({ error: "not found" }, 404) : c.json({ content });
+  });
+
+  app.post("/api/inbox/remove", async (c) => {
+    const b = await body<{ name: string }>(c);
+    if (!b || typeof b.name !== "string") return c.json({ ok: false }, 400);
+    const r = vault.removeFromInbox(b.name, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  // Files dropped on the window or a pasted link land in the inbox, for the agent to process.
+  app.post("/api/inbox", async (c) => {
+    const b = await body<{ name: string; content: string }>(c);
+    if (!b || typeof b.name !== "string" || typeof b.content !== "string") return c.json({ ok: false }, 400);
+    const r = vault.addToInbox(b.name, b.content, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  app.get("/api/rejected", (c) => c.json(vault.listRejected()));
+
+  app.get("/api/rejected/card", (c) => {
+    const f = vault.readRejected(c.req.query("file") ?? "");
+    if (!f) return c.json({ error: "not found" }, 404);
+    const resolve = (t: string) => vault.resolve(t)?.fm.title;
+    return c.json({
+      title: f.fm.title,
+      tags: f.fm.tags,
+      sources: f.fm.sources,
+      created: f.fm.created,
+      updated: f.fm.updated,
+      html: renderMarkdown(f.body, resolve),
+    });
+  });
+
+  app.post("/api/rejected/restore", async (c) => {
+    const b = await body<{ file: string }>(c);
+    if (!b || typeof b.file !== "string") return c.json({ ok: false }, 400);
+    const r = vault.restore(b.file, USER);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
   // The page polls this to refresh when the wiki changes on disk (the agent writes, you edit in Obsidian).
-  app.get("/api/version", (c) => c.json({ version: vault.version() }));
+  // `build` changes when Stet is updated on disk: the open page reloads to get the new interface.
+  app.get("/api/version", (c) => c.json({ version: vault.version(), build: buildStamp() }));
+
+  // An unknown API route is an error, not the page: an older server must not answer with HTML.
+  app.all("/api/*", (c) => c.json({ error: "unknown API route" }, 404));
 
   app.get("*", (c) => {
     let rel = decodeURIComponent(new URL(c.req.url).pathname);
@@ -327,6 +435,14 @@ export function createApp(vault: Vault, port: number, onActivity: () => void = (
   return app;
 }
 
+const at = (f: string) => {
+  try {
+    return fs.statSync(f).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
 export function serve(vault: Vault, opts: ServeOptions): Promise<Server> {
   let last = Date.now();
   const app = createApp(vault, opts.port, () => (last = Date.now()));
@@ -337,6 +453,13 @@ export function serve(vault: Vault, opts: ServeOptions): Promise<Server> {
       if (!opts.quiet) {
         const { port } = server.address() as AddressInfo;
         console.log(`Stet is running at http://127.0.0.1:${port}`);
+      }
+      // Under launchd, stop when Stet is updated on disk; launchd starts the new code on the next request.
+      if (opts.fd !== undefined) {
+        const built = at(SELF);
+        setInterval(() => {
+          if (at(SELF) !== built) process.exit(0);
+        }, 5_000).unref();
       }
       if (opts.idleMinutes) {
         const limit = opts.idleMinutes * 60_000;

@@ -1,5 +1,5 @@
 import MiniSearch from "minisearch";
-import { summaryOf, type Fiche } from "./fiche.js";
+import { summaryOf, type Card } from "./card.js";
 
 export interface Hit {
   title: string;
@@ -28,18 +28,18 @@ function excerpt(body: string, terms: string[]): string {
   return (start > 0 ? "..." : "") + flat.slice(start, start + 180) + (start + 180 < flat.length ? "..." : "");
 }
 
-/** Full-text search, rebuilt from the fiches on each call: cheap at wiki scale. */
-export function search(fiches: Fiche[], query: string, limit = 10): Hit[] {
+/** Full-text search, rebuilt from the cards on each call: cheap at wiki scale. */
+export function search(cards: Card[], query: string, limit = 10): Hit[] {
   const ms = new MiniSearch<{ id: number; title: string; tags: string; body: string }>({
     fields: ["title", "tags", "body"],
     processTerm: (t) => strip(t),
     searchOptions: { boost: { title: 3, tags: 2 }, prefix: true, fuzzy: 0.2, combineWith: "AND" },
   });
-  ms.addAll(fiches.map((f, id) => ({ id, title: f.fm.title, tags: f.fm.tags.join(" "), body: f.body })));
+  ms.addAll(cards.map((f, id) => ({ id, title: f.fm.title, tags: f.fm.tags.join(" "), body: f.body })));
   let results = ms.search(query);
   if (!results.length) results = ms.search(query, { combineWith: "OR" });
   return results.slice(0, limit).map((r) => {
-    const f = fiches[r.id as number];
+    const f = cards[r.id as number];
     return {
       title: f.fm.title,
       status: f.fm.status,
